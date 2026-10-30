@@ -2,12 +2,15 @@
 
 _Status: active_
 
-GPU402 is a payment rail for decentralized compute. The interface is near-black and quiet, with one electric blue and one editorial serif word per screen. It sits in the same family as Preflight, the Bittensor debugger: light headlines, mono labels, flat hairline panels, and a paper surface for the one number that matters.
+GPU402 is a payment rail for decentralized compute. The interface is near-black and quiet, with one electric blue and one editorial serif word per screen. Light headlines, mono labels, flat hairline panels, real 3D where it explains something, and a paper surface for the one number that matters. The signature is the status code itself: 402 turning into 200.
 
 ## Ideas
 
 - **A planet of real GPUs.** The hero is a globe of Lium's real nodes rising from the bottom of the screen, wrapped in an x402 payment ring. Payments travel the ring; rentals fire a beam to the miner's real location.
 - **Show the product working.** "How it works" is a terminal window that replays the latest real rental from the gateway's own events, step by step: Quote, Pay, Rent, Run, Release.
+- **Try everything for real.** The playground prices a GPU, shows the raw 402, and rents one paid from the visitor's own wallet, with an SSH key made in the browser. The API explorer sends the free endpoints live; package cards read npm live.
+- **One machine in 3D.** A GPU card built in three.js turns with the scroll and leans toward the pointer; its fans spin up while a real pod is live.
+- **Space over density.** Sections breathe (160 px apart on desktop), one sentence of context each, short lists with "Show more".
 - **One number on paper.** What agents paid, on a cream card, split by rail.
 - **Everything else one tap away.** Live details sit in tabs. Never a wall of tables.
 

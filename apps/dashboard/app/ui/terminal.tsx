@@ -120,7 +120,7 @@ export function HowItWorks({ events }: { events: GatewayEvent[] }) {
 
   const s = STEPS[step]!;
   return (
-    <section ref={ref} id="how" className="scroll-mt-24 py-20 lg:py-28">
+    <section ref={ref} id="how" className="scroll-mt-24 py-24 lg:py-40">
       <div className="grid items-center gap-10 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:gap-16">
         <div>
           <p className="eyebrow">

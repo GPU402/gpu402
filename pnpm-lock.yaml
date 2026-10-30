@@ -47,6 +47,15 @@ importers:
       '@react-three/postprocessing':
         specifier: ^3.2.2
         version: 3.2.2(@react-three/fiber@9.8.2(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(three@0.187.0))(@types/three@0.186.0)(postprocessing@6.39.5(three@0.187.0))(react@19.3.1)(three@0.187.0)
+      '@x402/core':
+        specifier: ^2.29.0
+        version: 2.29.0
+      '@x402/evm':
+        specifier: ^2.29.0
+        version: 2.29.0(typescript@5.9.3)
+      '@x402/fetch':
+        specifier: ^2.29.0
+        version: 2.29.0
       lucide-react:
         specifier: ^1.65.0
         version: 1.65.0(@types/react@19.3.0)(react@19.3.1)
@@ -68,6 +77,9 @@ importers:
       three:
         specifier: ^0.187.0
         version: 0.187.0
+      viem:
+        specifier: ^2.57.13
+        version: 2.57.13(typescript@5.9.3)(zod@4.6.7)
     devDependencies:
       '@tailwindcss/postcss':
         specifier: ^4.3.3
@@ -5396,7 +5408,7 @@ snapshots:
 
   '@scure/bip32@1.7.0':
     dependencies:
-      '@noble/curves': 1.9.1
+      '@noble/curves': 1.9.7
       '@noble/hashes': 1.8.0
       '@scure/base': 1.2.6
 

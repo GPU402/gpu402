@@ -155,3 +155,74 @@ dialog::backdrop {
   background: rgba(2, 2, 4, 0.72);
   backdrop-filter: blur(6px);
 }
+
+/* Endless ticker. Two identical tracks slide by one track's width. */
+.marquee-track {
+  animation: marquee var(--marquee-s, 50s) linear infinite;
+}
+.marquee:hover .marquee-track {
+  animation-play-state: paused;
+}
+@keyframes marquee {
+  to {
+    transform: translateX(-100%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .marquee-track {
+    animation: none;
+  }
+}
+
+/* A soft light that follows the pointer across a card. */
+.spotlight::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 200ms var(--ease-out);
+  background: radial-gradient(420px circle at var(--sx, 50%) var(--sy, 50%), rgba(157, 176, 255, 0.09), transparent 60%);
+}
+.spotlight:hover::before {
+  opacity: 1;
+}
+
+/* Code colours. */
+.c-kw {
+  color: var(--peri);
+}
+.c-str {
+  color: #b7e4a8;
+}
+.c-num {
+  color: #f2b880;
+}
+.c-fn {
+  color: var(--text);
+}
+.c-key {
+  color: #8fc7ff;
+}
+.c-com {
+  color: var(--faint);
+  font-style: italic;
+}
+
+/* Outlined wordmark in the footer. */
+.wordmark {
+  -webkit-text-stroke: 1px rgba(235, 238, 245, 0.14);
+  color: transparent;
+}
+
+/* Cards lean toward the pointer. */
+@media (prefers-reduced-motion: no-preference) and (hover: hover) {
+  .tilt {
+    transform: perspective(1000px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+    transition: transform 400ms var(--ease-out);
+    will-change: transform;
+  }
+  .tilt:hover {
+    transition-duration: 120ms;
+  }
+}

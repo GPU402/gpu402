@@ -14,13 +14,17 @@
     "@react-three/drei": "^10.7.9",
     "@react-three/fiber": "^9.8.2",
     "@react-three/postprocessing": "^3.2.2",
+    "@x402/core": "^2.29.0",
+    "@x402/evm": "^2.29.0",
+    "@x402/fetch": "^2.29.0",
     "lucide-react": "^1.65.0",
     "motion": "^14.9.0",
     "next": "^16.4.3",
     "postprocessing": "^6.39.5",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
-    "three": "^0.187.0"
+    "three": "^0.187.0",
+    "viem": "^2.57.13"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",

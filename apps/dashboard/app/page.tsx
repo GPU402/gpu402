@@ -1,22 +1,27 @@
 "use client";
 
 import { ArrowRight, ArrowUpRight, RefreshCw } from "lucide-react";
-import { useReducedMotion } from "motion/react";
+import { AnimatePresence, motion, useInView, useReducedMotion, useScroll, useTransform } from "motion/react";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { COLOR } from "./engine/colors";
 import type { EnginePod, EnginePulse } from "./engine/Engine";
-import { GATEWAY, getJson, networkName, type EngineNodeView, type GatewayEvent, type GatewayState, type LiumNetwork, type MarketModel, type PodView, type Sn51Stats } from "./lib";
-import { railOf } from "./ui/events";
+import { GATEWAY, getJson, gpuName, networkName, type EngineNodeView, type GatewayEvent, type GatewayState, type LiumNetwork, type MarketModel, type PodView, type Sn51Stats } from "./lib";
+import { Playground } from "./try/playground";
+import { ApiExplorer } from "./ui/api";
+import { eventMeta, railOf, toneColor } from "./ui/events";
+import { InstallChip, Marquee, Reveal, Scramble, SectionHead } from "./ui/kit";
 import { NowCard } from "./ui/now";
+import { Packages } from "./ui/packages";
 import { ActivityPanel, MarketPanel, PaymentsPanel, RentalDialog, RentalsPanel, SubnetPanel, TABS, TabBar, type Tab } from "./ui/panels";
-import { CountUp, Skeleton, cx, useNow } from "./ui/primitives";
+import { CountUp, Skeleton, ago, cx, useNow } from "./ui/primitives";
 import { HowItWorks } from "./ui/terminal";
 
 const REPO = "https://github.com/GPU402/gpu402";
 
 // three.js needs the browser: load the globe on the client only.
 const Engine = dynamic(() => import("./engine/Engine"), { ssr: false });
+const GpuCard = dynamic(() => import("./engine/GpuCard"), { ssr: false });
 
 function usePoll<T>(path: string, everyMs: number) {
   const [data, setData] = useState<T | null>(null);
@@ -38,6 +43,14 @@ function usePoll<T>(path: string, everyMs: number) {
 }
 
 const PULSE_MS = 4000;
+const NAV = [
+  ["How it works", "#how"],
+  ["Try it", "#try"],
+  ["Packages", "#packages"],
+  ["API", "#api"],
+  ["Network", "#network"],
+  ["Live", "#live"],
+] as const;
 
 export default function Dashboard() {
   const state = usePoll<GatewayState>("/api/state", 4000);
@@ -46,7 +59,7 @@ export default function Dashboard() {
   const lium = usePoll<LiumNetwork>("/api/lium", 60_000);
   const nodes = usePoll<{ nodes: EngineNodeView[] }>("/api/nodes", 60_000);
   const now = useNow();
-  const still = useReducedMotion() ?? false;
+  const reduce = useReducedMotion() ?? false;
 
   const [live, setLive] = useState<GatewayEvent[]>([]);
   const [connected, setConnected] = useState(false);
@@ -118,36 +131,37 @@ export default function Dashboard() {
     [pods],
   );
 
+  // The globe drifts and fades as the hero scrolls away.
+  const hero = useRef<HTMLElement>(null);
+  const { scrollYProgress } = useScroll({ target: hero, offset: ["start start", "end start"] });
+  const globeY = useTransform(scrollYProgress, [0, 1], [0, reduce ? 0 : 160]);
+  const globeOpacity = useTransform(scrollYProgress, [0, 0.85], [1, reduce ? 1 : 0.15]);
+
   const current = pods.find((p) => p.status === "running" || p.status === "starting") ?? pods[0] ?? null;
   const openPod = pods.find((p) => p.podId === open) ?? null;
   const offline = Boolean(state.error) && !s;
   const online = connected && !state.error;
   const nodeCount = nodes.data?.nodes.length ?? 0;
-  const pickTab = (t: Tab) => (setTab(t), document.getElementById("live")?.scrollIntoView({ block: "start" }));
+  const models = market.data?.models ?? null;
 
   return (
     <div className="relative min-h-dvh overflow-x-clip">
+      <a href="#try" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-text focus:px-4 focus:py-2 focus:text-void">
+        Skip to the playground
+      </a>
+
       <nav className="fixed inset-x-0 top-3 z-40 px-3 sm:px-4" aria-label="Main">
-        <div className="mx-auto flex max-w-[1240px] items-center gap-2 rounded-2xl border border-hair bg-void/70 px-3 py-2 backdrop-blur-xl sm:gap-6">
+        <div className="mx-auto flex max-w-[1280px] items-center gap-2 rounded-2xl border border-hair bg-void/70 px-3 py-2 backdrop-blur-xl sm:gap-4">
           <a href="#top" className="flex min-h-10 items-center gap-2 rounded-lg px-1 focus-visible:outline-2 focus-visible:outline-peri">
             <Mark />
             <span className="text-[15px] font-medium tracking-tight">GPU402</span>
           </a>
-          <div className="hidden items-center gap-1 text-sm text-muted md:flex">
-            {[
-              ["How it works", "#how"],
-              ["Live", "#live"],
-            ].map(([l, h]) => (
-              <a key={h} href={h} className="rounded-lg px-3 py-2 hover:text-text focus-visible:outline-2 focus-visible:outline-peri">
+          <div className="hidden items-center text-sm text-muted lg:flex">
+            {NAV.map(([l, h]) => (
+              <a key={h} href={h} className="rounded-lg px-3 py-2 transition-colors duration-100 hover:text-text focus-visible:outline-2 focus-visible:outline-peri">
                 {l}
               </a>
             ))}
-            <button type="button" onClick={() => pickTab("Market")} className="rounded-lg px-3 py-2 hover:text-text focus-visible:outline-2 focus-visible:outline-peri">
-              Market
-            </button>
-            <button type="button" onClick={() => pickTab("Subnet 51")} className="rounded-lg px-3 py-2 hover:text-text focus-visible:outline-2 focus-visible:outline-peri">
-              Subnet 51
-            </button>
           </div>
           <span
             role="status"
@@ -158,63 +172,78 @@ export default function Dashboard() {
             {online ? "Testnet" : "Offline"}
           </span>
           <a
-            href={REPO}
-            target="_blank"
-            rel="noreferrer"
+            href="#try"
             className="inline-flex min-h-9 items-center gap-1.5 rounded-full bg-text px-4 text-[13px] font-medium text-void hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-peri"
           >
-            GitHub <ArrowRight className="size-3.5" aria-hidden />
+            Try it <ArrowRight className="size-3.5" aria-hidden />
           </a>
         </div>
       </nav>
 
-      {/* Hero: the headline, with the globe of real Lium nodes rising behind it. */}
-      <header id="top" className="relative flex min-h-[100svh] flex-col overflow-hidden">
+      {/* ------------------------------------------------------------- hero */}
+      <header ref={hero} id="top" className="relative isolate flex min-h-[100svh] flex-col overflow-hidden">
+        <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(60%_50%_at_75%_45%,rgba(67,96,255,0.16),transparent_70%)]" aria-hidden />
+        {/* Position on the outer box; the inner one takes the scroll transform, which would override Tailwind's translate. */}
         <div
-          className="absolute left-1/2 top-[44svh] aspect-square w-[min(1280px,170vw)] -translate-x-1/2 sm:top-[40svh]"
+          className="absolute left-1/2 top-[50svh] aspect-square w-[min(1100px,160vw)] -translate-x-1/2 lg:left-auto lg:right-[-14vw] lg:top-1/2 lg:w-[min(1080px,72vw)] lg:-translate-y-1/2 lg:translate-x-0"
           role="img"
           aria-label={`Globe of ${nodeCount} Lium GPU nodes. Payments circle the ring; each rental fires a beam to its miner.`}
         >
-          <Engine nodes={nodes.data?.nodes ?? []} pods={enginePods} pulses={pulses} still={still} />
+          <motion.div style={{ y: globeY, opacity: globeOpacity }} className="size-full">
+            <Engine nodes={nodes.data?.nodes ?? []} pods={enginePods} pulses={pulses} still={reduce} />
+          </motion.div>
         </div>
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-void to-transparent" aria-hidden />
 
-        <div className="pointer-events-none relative z-10 mx-auto flex max-w-3xl flex-col items-center px-4 pt-32 text-center sm:pt-36">
-          <a
-            href="#how"
-            className="pointer-events-auto inline-flex min-h-9 items-center gap-2 rounded-full border border-hair bg-ink-1 px-3.5 text-[13px] text-muted backdrop-blur hover:text-text focus-visible:outline-2 focus-visible:outline-peri"
-          >
-            <span className="size-1.5 rounded-full bg-live" aria-hidden />
-            x402 GPU rentals for agents · live on testnet
-            <ArrowRight className="size-3.5" aria-hidden />
-          </a>
-          <h1 className="mt-7 text-[clamp(2.6rem,7vw,4.6rem)] font-light leading-[1.02] tracking-[-0.055em]">
-            Rent a GPU <span className="font-serif text-[1.08em] italic tracking-[-0.02em] text-peri">in one</span>
-            <br />
-            HTTP request
-          </h1>
-          <p className="mt-6 max-w-xl text-[17px] leading-relaxed text-muted">
-            An agent pays with USDC or TAO and gets a Bittensor Subnet 51 GPU from Lium. No account, no API key.
-          </p>
-          <div className="pointer-events-auto mt-8 flex flex-wrap justify-center gap-3">
-            <a href="#live" className="btn-accent inline-flex min-h-11 items-center gap-2 rounded-full px-5 text-[15px] font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-peri">
-              Watch it live <ArrowRight className="size-4" aria-hidden />
-            </a>
-            <a
-              href="#how"
-              className="inline-flex min-h-11 items-center rounded-full border border-hair bg-ink-1 px-5 text-[15px] text-text backdrop-blur hover:bg-ink-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-peri"
+        <div className="relative z-10 mx-auto w-full max-w-[1280px] px-4 pt-32 sm:px-6 sm:pt-40 lg:pt-44">
+          <div className="max-w-[640px]">
+            <motion.p
+              initial={reduce ? false : { opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+              className="num inline-flex items-center gap-3 rounded-full border border-hair bg-void/50 py-1.5 pl-1.5 pr-4 text-[13px] backdrop-blur"
             >
-              How it works
-            </a>
+              <span className="rounded-full bg-accent/20 px-2.5 py-0.5 text-peri">HTTP</span>
+              <Scramble words={["402 Payment Required", "200 OK · GPU ready"]} className="text-text" />
+            </motion.p>
+
+            <motion.h1
+              initial={reduce ? false : { opacity: 0, y: 24, filter: "blur(8px)" }}
+              animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+              transition={{ duration: 0.9, delay: 0.08, ease: [0.16, 1, 0.3, 1] }}
+              className="mt-8 text-[clamp(2.9rem,7.4vw,6.2rem)] font-light leading-[0.94] tracking-[-0.06em]"
+            >
+              GPUs that agents
+              <br />
+              <span className="font-serif text-[1.06em] italic tracking-[-0.02em] text-peri">pay for</span> themselves.
+            </motion.h1>
+
+            <motion.div
+              initial={reduce ? false : { opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
+            >
+              <p className="mt-7 max-w-[30rem] text-[18px] leading-relaxed text-muted">
+                One HTTP request rents a Bittensor Subnet 51 GPU from Lium. The agent pays with x402, in USDC or TAO. No account, no API key, no human.
+              </p>
+              <div className="mt-9 flex flex-wrap items-center gap-3">
+                <a href="#try" className="btn-accent inline-flex min-h-12 items-center gap-2 rounded-full px-6 text-[15px] font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-peri">
+                  Rent one from here <ArrowRight className="size-4" aria-hidden />
+                </a>
+                <InstallChip cmd="npm i @gpu402/tools" />
+              </div>
+            </motion.div>
           </div>
         </div>
 
-        <div className="relative z-10 mx-auto mt-auto flex w-full max-w-[1240px] flex-wrap items-end justify-between gap-4 px-4 pb-6 sm:px-6">
+        {/* Real events, as they happen, floating over the globe. */}
+        <EventToasts events={events} now={now} reduce={reduce} />
+
+        <div className="relative z-10 mx-auto mt-auto flex w-full max-w-[1280px] flex-wrap items-end justify-between gap-4 px-4 pb-6 pt-10 sm:px-6">
           <p className="flex items-center gap-2 text-[13px] text-muted">
             <span className="size-1.5 rounded-full bg-white" aria-hidden />
             <span className="size-1.5 rounded-full bg-accent" aria-hidden />
             <span>
-              <span className="num text-text">{nodeCount || "—"}</span> Lium nodes. White is cheapest, blue is premium.
+              <span className="num text-text">{nodeCount || "—"}</span> Lium nodes, live. Drag the globe.
             </span>
           </p>
           <dl className="grid grid-cols-3 divide-x divide-hair overflow-hidden rounded-xl border border-hair bg-void/70 backdrop-blur-xl">
@@ -225,7 +254,37 @@ export default function Dashboard() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-[1240px] px-4 sm:px-6">
+      {/* Live market ticker */}
+      <div className="border-y border-hair bg-ink-1 py-4" aria-label="Live GPU prices">
+        {models ? (
+          <Marquee seconds={Math.max(30, models.length * 4)}>
+            {models.slice(0, 16).map((m) => (
+              <span key={m.gpu} className="flex shrink-0 items-baseline gap-3 text-[14px]">
+                <span className="text-text">{gpuName(m.gpu)}</span>
+                <span className="num text-peri">${m.blockPriceUsd.toFixed(4)}</span>
+                <span className="eyebrow text-[10px]">/15 min · {m.gpusAvailable} free</span>
+                <span className="text-faint" aria-hidden>
+                  ✦
+                </span>
+              </span>
+            ))}
+            {chain.data && (
+              <span className="flex shrink-0 items-baseline gap-3 text-[14px]">
+                <span className="text-text">Subnet 51</span>
+                <span className="num text-peri">block {chain.data.block.toLocaleString()}</span>
+                <span className="eyebrow text-[10px]">{chain.data.minersWithIncentive} miners earning</span>
+                <span className="text-faint" aria-hidden>
+                  ✦
+                </span>
+              </span>
+            )}
+          </Marquee>
+        ) : (
+          <Skeleton className="mx-4 h-6" />
+        )}
+      </div>
+
+      <main className="mx-auto max-w-[1280px] px-4 sm:px-6">
         {offline && (
           <div role="alert" className="glass mt-10 flex flex-wrap items-center justify-between gap-3 rounded-2xl p-4">
             <p className="text-sm">
@@ -243,17 +302,88 @@ export default function Dashboard() {
 
         <HowItWorks events={events} />
 
-        {s && <Ledger s={s} />}
+        <Machine live={enginePods.some((p) => p.status === "running")} reduce={reduce} nodes={nodeCount} models={models?.length ?? 0} />
 
-        <section id="live" className="scroll-mt-24 py-20 lg:py-28">
-          <p className="eyebrow">
-            <span className="text-peri">02</span> —— Live / {tab}
-          </p>
-          <div className="mt-5 grid gap-10 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:gap-16">
-            <div className="grid content-start gap-6">
-              <h2 className="text-[clamp(1.75rem,3vw,2.5rem)] font-light leading-[1.1] tracking-[-0.035em]">What the gateway is doing now.</h2>
-              {s ? <NowCard pod={current} now={now} onOpen={(p) => setOpen(p.podId)} /> : <Skeleton className="h-56 rounded-2xl" />}
-            </div>
+        <section id="try" className="scroll-mt-24 py-24 lg:py-40" aria-labelledby="try-title">
+          <SectionHead
+            n="02"
+            kicker="Playground"
+            title={
+              <span id="try-title">
+                Don’t take our word. <span className="font-serif italic text-peri">Send it.</span>
+              </span>
+            }
+            lede="Every button here hits the live gateway. Price a GPU, read its 402, then rent one with your own wallet."
+          />
+          <Reveal depth className="mt-16">
+            <Playground models={models} />
+          </Reveal>
+        </section>
+
+        {s && (
+          <section className="py-24 lg:py-40" aria-label="Proof">
+            <SectionHead n="03" kicker="Proof" title="Real money moved. On-chain." lede="Every payment settled on-chain. Every rental ran on a real miner." />
+            <Reveal depth className="mt-16">
+              <Ledger s={s} />
+            </Reveal>
+          </section>
+        )}
+
+        <section id="packages" className="scroll-mt-24 py-24 lg:py-40" aria-labelledby="pk-title">
+          <SectionHead
+            n="04"
+            kicker="Packages"
+            title={
+              <span id="pk-title">
+                Two packages. <span className="font-serif italic text-peri">One line</span> to a GPU.
+              </span>
+            }
+            lede="Live from the npm registry. Use the SDK with your Lium key, or give the tools to an agent and let it pay."
+          />
+          <div className="mt-16">
+            <Packages />
+          </div>
+        </section>
+
+        <section id="api" className="scroll-mt-24 py-24 lg:py-40" aria-labelledby="api-title">
+          <SectionHead
+            n="05"
+            kicker="API"
+            title={<span id="api-title">Plain HTTP, all the way down.</span>}
+            lede="Pick an endpoint and send it. The free ones answer right here."
+          />
+          <Reveal depth className="mt-16">
+            <ApiExplorer />
+          </Reveal>
+        </section>
+
+        <section id="network" className="scroll-mt-24 py-24 lg:py-40" aria-labelledby="net-title">
+          <SectionHead
+            n="06"
+            kicker="Network"
+            title={
+              <span id="net-title">
+                Compute from <span className="font-serif italic text-peri">Subnet 51.</span>
+              </span>
+            }
+            lede="Bittensor pays Lium’s miners to serve GPUs. GPU402 puts a price and a wallet in front."
+          />
+          <div className="mt-16 grid gap-6">
+            <Reveal className="rounded-3xl border border-hair bg-ink-1 p-6 sm:p-8">
+              <p className="eyebrow mb-6">Subnet 51 · Bittensor Finney</p>
+              <SubnetPanel c={chain.data} lium={lium.data} />
+            </Reveal>
+            <Reveal delay={0.08} className="rounded-3xl border border-hair bg-ink-1 p-6 sm:p-8">
+              <p className="eyebrow mb-6">Market · GPU402 price per 15 minutes</p>
+              <MarketPanel models={models ?? (market.error ? [] : null)} />
+            </Reveal>
+          </div>
+        </section>
+
+        <section id="live" className="scroll-mt-24 py-24 lg:py-40" aria-labelledby="live-title">
+          <SectionHead n="07" kicker={`Live / ${tab}`} title={<span id="live-title">What the gateway is doing now.</span>} />
+          <div className="mt-16 grid gap-12 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:gap-20">
+            <div className="grid content-start gap-6">{s ? <NowCard pod={current} now={now} onOpen={(p) => setOpen(p.podId)} /> : <Skeleton className="h-56 rounded-2xl" />}</div>
             <div>
               <TabBar tab={tab} onChange={setTab} />
               <div
@@ -263,7 +393,7 @@ export default function Dashboard() {
                 tabIndex={0}
                 className="mt-6 rounded-2xl focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-peri"
               >
-                {!s && tab !== "Market" && tab !== "Subnet 51" ? (
+                {!s ? (
                   <div className="grid gap-2" aria-busy="true">
                     {Array.from({ length: 4 }, (_, i) => (
                       <Skeleton key={i} className="h-16" />
@@ -273,12 +403,8 @@ export default function Dashboard() {
                   <ActivityPanel events={events} now={now} />
                 ) : tab === "Rentals" ? (
                   <RentalsPanel pods={pods} now={now} onOpen={(p) => setOpen(p.podId)} />
-                ) : tab === "Payments" ? (
-                  <PaymentsPanel s={s!} now={now} />
-                ) : tab === "Market" ? (
-                  <MarketPanel models={market.data?.models ?? (market.error ? [] : null)} />
                 ) : (
-                  <SubnetPanel c={chain.data} lium={lium.data} />
+                  <PaymentsPanel s={s} now={now} />
                 )}
               </div>
             </div>
@@ -286,15 +412,82 @@ export default function Dashboard() {
         </section>
       </main>
 
-      <footer className="mx-auto flex max-w-[1240px] flex-wrap justify-between gap-2 border-t border-hair px-4 py-8 text-[13px] text-faint sm:px-6">
-        <span>GPU402 · open source · Bittensor Subnet 51 via Lium</span>
-        <a href={REPO} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 hover:text-text focus-visible:outline-2 focus-visible:outline-peri">
-          github.com/GPU402/gpu402 <ArrowUpRight className="size-3" aria-hidden />
-        </a>
-      </footer>
-
+      <Footer online={online} />
       <RentalDialog pod={openPod} now={now} onClose={() => setOpen(null)} />
     </div>
+  );
+}
+
+/** A full-width pause: one real GPU, in 3D, turning as the page scrolls. */
+function Machine({ live, reduce, nodes, models }: { live: boolean; reduce: boolean; nodes: number; models: number }) {
+  const ref = useRef<HTMLElement>(null);
+  const near = useInView(ref, { margin: "200px", once: true });
+  const { scrollYProgress } = useScroll({ target: ref, offset: ["start end", "end start"] });
+  const words = useTransform(scrollYProgress, [0, 1], reduce ? [0, 0] : [120, -120]);
+  return (
+    <section ref={ref} className="relative -mx-4 overflow-hidden py-24 sm:-mx-6 lg:py-36" aria-labelledby="machine-title">
+      <motion.p style={{ x: words }} className="wordmark pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 select-none whitespace-nowrap text-center text-[clamp(5rem,17vw,16rem)] font-light leading-none tracking-[-0.06em]" aria-hidden>
+        one request
+      </motion.p>
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(40%_45%_at_50%_50%,rgba(67,96,255,0.18),transparent_70%)]" aria-hidden />
+      <div className="relative mx-auto h-[min(62vh,560px)] max-w-5xl">{near && <GpuCard live={live} still={reduce} scroll={scrollYProgress} />}</div>
+      <div className="relative mx-auto mt-6 max-w-3xl px-4 text-center">
+        <h2 id="machine-title" className="text-[clamp(1.75rem,3.4vw,2.75rem)] font-light leading-[1.08] tracking-[-0.04em] text-balance">
+          Every GPU here is a <span className="font-serif italic text-peri">real machine</span>, on a Subnet 51 miner.
+        </h2>
+        <dl className="mx-auto mt-12 grid max-w-xl grid-cols-3 gap-6">
+          {[
+            [nodes ? String(nodes) : "—", "nodes"],
+            [models ? String(models) : "—", "GPU models"],
+            ["15", "min blocks"],
+          ].map(([v, k]) => (
+            <div key={k} className="flex flex-col-reverse">
+              <dt className="eyebrow mt-1 text-[10px]">{k}</dt>
+              <dd className="text-[clamp(2rem,4vw,3rem)] font-light tracking-[-0.04em] tabular-nums">{v}</dd>
+            </div>
+          ))}
+        </dl>
+        <p className="mt-10 text-[13px] text-faint">{live ? "A pod is live right now: watch the fans." : "Drag your pointer across it. The fans spin up while a pod is live."}</p>
+      </div>
+    </section>
+  );
+}
+
+/** The three most recent real events, stacked beside the globe. */
+function EventToasts({ events, now, reduce }: { events: GatewayEvent[]; now: number; reduce: boolean }) {
+  const top = events.filter((e) => e.type !== "quote.issued").slice(0, 3);
+  if (top.length === 0) return null;
+  return (
+    <ol className="pointer-events-none absolute right-6 top-[58%] z-10 hidden w-[300px] gap-2 xl:grid" aria-label="Latest gateway events">
+      <AnimatePresence initial={false}>
+        {top.map((e, i) => {
+          const m = eventMeta(e);
+          const Icon = m.icon;
+          return (
+            <motion.li
+              key={e.id}
+              layout={!reduce}
+              initial={reduce ? false : { opacity: 0, x: 24, scale: 0.96 }}
+              animate={{ opacity: 1 - i * 0.22, x: 0, scale: 1 }}
+              exit={reduce ? undefined : { opacity: 0, x: -12 }}
+              transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+              className="flex items-start gap-3 rounded-2xl border border-hair bg-void/75 p-3 backdrop-blur-xl"
+            >
+              <span className="grid size-8 shrink-0 place-items-center rounded-xl bg-ink-2" style={{ color: toneColor[m.tone] }}>
+                <Icon className="size-4" aria-hidden />
+              </span>
+              <div className="min-w-0">
+                <p className="flex items-baseline justify-between gap-2 text-[13px] text-text">
+                  {m.label}
+                  <span className="num text-[11px] text-faint">{ago(e.ts, now)}</span>
+                </p>
+                <p className="truncate text-[12px] text-muted">{e.message}</p>
+              </div>
+            </motion.li>
+          );
+        })}
+      </AnimatePresence>
+    </ol>
   );
 }
 
@@ -317,40 +510,64 @@ function Ledger({ s }: { s: GatewayState }) {
     { label: "USDC on Base", usd: usdc, n: settled.filter((p) => p.asset !== "TAO").length, color: "bg-cobalt" },
     { label: "TAO on Bittensor", usd: tao, n: settled.filter((p) => p.asset === "TAO").length, color: "bg-rust" },
   ];
+  const recent = settled.slice(0, 3);
   return (
-    <section aria-labelledby="ledger-title" className="grid gap-3">
-      <div className="rounded-3xl bg-paper p-6 text-paper-ink sm:p-10">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <p id="ledger-title" className="text-[clamp(3rem,9vw,6rem)] font-light tabular-nums leading-none tracking-[-0.06em] text-rust">
-              <CountUp value={s.totals.usdcReceived} format={(n) => `$${n.toFixed(2)}`} />
-            </p>
-            <p className="mt-3 text-[17px] text-paper-ink">paid by agents over x402, in {s.totals.payments} payments</p>
+    <div className="grid gap-3">
+      <div className="grid gap-8 rounded-3xl bg-paper p-6 text-paper-ink sm:p-10 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
+        <div>
+          <p className="text-[clamp(3.4rem,10vw,7.5rem)] font-light leading-[0.9] tracking-[-0.065em] text-rust tabular-nums">
+            <CountUp value={s.totals.usdcReceived} format={(n) => `$${n.toFixed(2)}`} />
+          </p>
+          <p className="mt-4 text-[17px]">paid by agents over x402, in {s.totals.payments} payments</p>
+          <div className="mt-8 flex h-12 overflow-hidden rounded-xl" role="img" aria-label={rails.map((r) => `${r.label} ${Math.round((r.usd / total) * 100)}%`).join(", ")}>
+            {rails
+              .filter((r) => r.usd > 0)
+              .map((r) => (
+                <div key={r.label} className={cx("num flex items-center px-4 text-[13px] text-white", r.color)} style={{ width: `${(r.usd / total) * 100}%` }}>
+                  {Math.round((r.usd / total) * 100)}%
+                </div>
+              ))}
           </div>
-          <p className="eyebrow !text-paper-muted">By rail</p>
-        </div>
-        <div className="mt-8 flex h-12 overflow-hidden rounded-xl" role="img" aria-label={rails.map((r) => `${r.label} ${Math.round((r.usd / total) * 100)}%`).join(", ")}>
-          {rails
-            .filter((r) => r.usd > 0)
-            .map((r) => (
-              <div key={r.label} className={cx("num flex items-center px-4 text-[13px] text-white", r.color)} style={{ width: `${(r.usd / total) * 100}%` }}>
-                {Math.round((r.usd / total) * 100)}%
-              </div>
+          <ul className="mt-5 grid gap-3 sm:grid-cols-2">
+            {rails.map((r) => (
+              <li key={r.label} className="flex items-center justify-between gap-3 text-[15px]">
+                <span className="flex items-center gap-2.5">
+                  <span className={cx("size-2.5 rounded-sm", r.color)} aria-hidden />
+                  {r.label}
+                </span>
+                <span className="num text-[13px] text-paper-muted">
+                  ${r.usd.toFixed(4)} · {r.n}
+                </span>
+              </li>
             ))}
+          </ul>
         </div>
-        <ul className="mt-6 grid gap-3 sm:grid-cols-2">
-          {rails.map((r) => (
-            <li key={r.label} className="flex items-center justify-between gap-3 text-[15px]">
-              <span className="flex items-center gap-2.5">
-                <span className={cx("size-2.5 rounded-sm", r.color)} aria-hidden />
-                {r.label}
-              </span>
-              <span className="num text-[13px] text-paper-muted">
-                ${r.usd.toFixed(4)} · {r.n}
-              </span>
-            </li>
-          ))}
-        </ul>
+        <div className="flex flex-col">
+          <p className="eyebrow !text-paper-muted">Latest settlements</p>
+          <ul className="mt-4 grid divide-y divide-paper-hair border-y border-paper-hair">
+            {recent.map((p) => {
+              const tao = p.asset === "TAO";
+              return (
+                <li key={p.id} className="flex items-center justify-between gap-3 py-3 text-[14px]">
+                  <span className="flex items-center gap-2.5">
+                    <span className={cx("size-2 rounded-full", tao ? "bg-rust" : "bg-cobalt")} aria-hidden />
+                    <span className="num">${p.amount_usd.toFixed(4)}</span>
+                    <span className="text-paper-muted">{tao ? "TAO" : "USDC"}</span>
+                  </span>
+                  {p.explorerUrl ? (
+                    <a href={p.explorerUrl} target="_blank" rel="noreferrer" className="num inline-flex items-center gap-1 text-[12px] text-cobalt hover:underline focus-visible:outline-2 focus-visible:outline-cobalt">
+                      {p.tx_hash.slice(0, 10)}… <ArrowUpRight className="size-3" aria-hidden />
+                    </a>
+                  ) : (
+                    <span className="num text-[12px] text-paper-muted" title={p.tx_hash}>
+                      {p.tx_hash.slice(0, 10)}…
+                    </span>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
       </div>
       <dl className="grid divide-y divide-paper-hair overflow-hidden rounded-3xl bg-paper text-paper-ink sm:grid-cols-3 sm:divide-x sm:divide-y-0">
         {[
@@ -361,14 +578,61 @@ function Ledger({ s }: { s: GatewayState }) {
           <div key={k} className="p-6 sm:p-8">
             <dt className="sr-only">{k}</dt>
             <dd>
-              <span className={cx("text-[2.25rem] font-light tracking-[-0.04em]", i === 2 && "text-cobalt")}>{v}</span>
+              <span className={cx("text-[2.4rem] font-light tracking-[-0.045em]", i === 2 && "text-cobalt")}>{v}</span>
               <span className="eyebrow ml-2 !text-paper-muted">{k}</span>
               <p className="mt-1 text-[15px] text-paper-muted">{d}</p>
             </dd>
           </div>
         ))}
       </dl>
-    </section>
+    </div>
+  );
+}
+
+function Footer({ online }: { online: boolean }) {
+  const cols = [
+    ["Build", [["SDK on npm", "https://www.npmjs.com/package/gpu402"], ["Agent tools on npm", "https://www.npmjs.com/package/@gpu402/tools"], ["Source on GitHub", REPO]]],
+    ["Learn", [["How it works", "#how"], ["Playground", "#try"], ["API", "#api"]]],
+    ["Network", [["Lium", "https://lium.io"], ["Bittensor", "https://bittensor.com"], ["x402", "https://x402.org"]]],
+  ] as const;
+  return (
+    <footer className="relative mt-16 overflow-hidden border-t border-hair">
+      <div className="mx-auto grid max-w-[1280px] gap-10 px-4 pb-6 pt-16 sm:px-6 lg:grid-cols-[minmax(0,1.2fr)_repeat(3,minmax(0,0.6fr))]">
+        <div>
+          <a href="#top" className="inline-flex items-center gap-2 rounded-lg focus-visible:outline-2 focus-visible:outline-peri">
+            <Mark />
+            <span className="text-[15px] font-medium">GPU402</span>
+          </a>
+          <p className="mt-4 max-w-xs text-[15px] text-muted">The payment rail between AI agents and decentralized GPUs. Open source, MIT.</p>
+          <p className="mt-5 inline-flex items-center gap-2 text-[13px] text-muted">
+            <span className={cx("size-1.5 rounded-full", online ? "bg-live" : "bg-rose")} aria-hidden />
+            {online ? "Gateway online" : "Gateway offline"}
+          </p>
+        </div>
+        {cols.map(([title, links]) => (
+          <nav key={title} aria-label={title}>
+            <p className="eyebrow text-[10px]">{title}</p>
+            <ul className="mt-4 grid gap-2.5 text-[14px] text-muted">
+              {links.map(([l, h]) => (
+                <li key={l}>
+                  <a
+                    href={h}
+                    {...(h.startsWith("http") ? { target: "_blank", rel: "noreferrer" } : {})}
+                    className="inline-flex items-center gap-1 transition-colors duration-100 hover:text-text focus-visible:outline-2 focus-visible:outline-peri"
+                  >
+                    {l}
+                    {h.startsWith("http") && <ArrowUpRight className="size-3" aria-hidden />}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </nav>
+        ))}
+      </div>
+      <p className="wordmark pointer-events-none select-none text-center text-[clamp(5rem,23vw,22rem)] font-light leading-[0.8] tracking-[-0.07em]" aria-hidden>
+        GPU402
+      </p>
+    </footer>
   );
 }
 

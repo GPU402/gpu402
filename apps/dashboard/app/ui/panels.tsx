@@ -16,13 +16,7 @@ import {
 import { eventMeta, gpuShort, place, toneColor } from "./events";
 import { CountdownRing, Empty, Pill, Skeleton, ago, cx } from "./primitives";
 
-export const TABS = [
-  "Activity",
-  "Rentals",
-  "Payments",
-  "Market",
-  "Subnet 51",
-] as const;
+export const TABS = ["Activity", "Rentals", "Payments"] as const;
 export type Tab = (typeof TABS)[number];
 
 /** WAI-ARIA tabs: arrow keys move between tabs, Home/End jump. */
@@ -98,7 +92,7 @@ export function ActivityPanel({
   return (
     <>
       <ol className="grid gap-1" aria-live="polite">
-        {events.slice(0, all ? 40 : 8).map((e) => {
+        {events.slice(0, all ? 40 : 6).map((e) => {
           const m = eventMeta(e);
           const Icon = m.icon;
           const url = (() => {
@@ -150,7 +144,7 @@ export function ActivityPanel({
           );
         })}
       </ol>
-      {events.length > 8 && (
+      {events.length > 6 && (
         <button
           type="button"
           onClick={() => setAll((a) => !a)}
@@ -193,7 +187,7 @@ export function RentalsPanel({
     );
   return (
     <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-      {pods.slice(0, 12).map((p) => {
+      {pods.slice(0, 6).map((p) => {
         const left =
           p.status === "running" && p.expiresAt
             ? Math.max(0, (Date.parse(p.expiresAt) - now) / 1000)
@@ -336,7 +330,7 @@ export function MarketPanel({ models }: { models: MarketModel[] | null }) {
   const max = Math.max(...models.slice(0, 12).map((m) => m.blockPriceUsd));
   return (
     <ul className="grid gap-1">
-      {models.slice(0, 12).map((m) => (
+      {models.slice(0, 7).map((m) => (
         <li
           key={m.gpu}
           className="grid grid-cols-[1fr_auto] items-center gap-4 rounded-2xl px-3 py-2.5 transition-colors duration-100 hover:bg-ink-1 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_auto]"
