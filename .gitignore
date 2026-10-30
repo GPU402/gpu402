@@ -28,3 +28,6 @@ claude.md
 .vscode/
 .idea/
 .DS_Store
+
+# local notes
+DEMO.md

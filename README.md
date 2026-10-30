@@ -154,7 +154,7 @@ pnpm dev               # gateway on :4020, dashboard on :3000
 pnpm demo:agent        # an agent rents a GPU, benchmarks it, and gives it back
 ```
 
-The agent takes any task you hand it, such as `pnpm demo:agent "fine-tune a tiny MLP on MNIST and report accuracy"`. For recording a demo, see [DEMO.md](DEMO.md).
+The agent takes any task you hand it, such as `pnpm demo:agent "fine-tune a tiny MLP on MNIST and report accuracy"`.
 
 <br>
 
