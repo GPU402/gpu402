@@ -1,0 +1,30 @@
+# dependencies and builds
+node_modules
+dist
+.next
+*.tsbuildinfo
+coverage
+
+# secrets: never commit
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+.keys
+
+# runtime data (gateway ledger)
+data/
+*.db
+*.db-*
+
+# local tooling and AI assistant files
+.claude/
+AGENTS.md
+agents.md
+CLAUDE.md
+claude.md
+.cursor/
+.vscode/
+.idea/
+.DS_Store

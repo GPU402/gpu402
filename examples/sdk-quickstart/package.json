@@ -1,0 +1,14 @@
+{
+  "name": "@gpu402/sdk-quickstart",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Five lines: rent the cheapest Lium GPU, run nvidia-smi, stop it.",
+  "type": "module",
+  "scripts": {
+    "start": "tsx --env-file-if-exists=../../.env index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "gpu402": "workspace:*"
+  }
+}

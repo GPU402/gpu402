@@ -1,0 +1,67 @@
+{
+  "name": "gpu402",
+  "version": "0.1.0",
+  "description": "Typed TypeScript SDK for Lium (Bittensor Subnet 51): rent the cheapest matching GPU, wait until ready, run a job over SSH, stop it, enforce a budget.",
+  "license": "MIT",
+  "type": "module",
+  "keywords": [
+    "lium",
+    "bittensor",
+    "subnet-51",
+    "gpu",
+    "rental",
+    "sdk",
+    "x402",
+    "ai-agents"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/GPU402/gpu402.git",
+    "directory": "packages/sdk"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./openapi": {
+      "types": "./dist/openapi.d.ts",
+      "import": "./dist/openapi.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "openapi.json"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "gen:types": "node scripts/gen-types.mjs",
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "prepublishOnly": "pnpm run build && pnpm run test"
+  },
+  "dependencies": {
+    "openapi-fetch": "^0.17.0",
+    "ssh2": "^1.17.0"
+  },
+  "devDependencies": {
+    "@types/ssh2": "^1.15.6",
+    "openapi-typescript": "^7.13.0",
+    "tsup": "^9.0.0",
+    "vitest": "^5.0.5"
+  },
+  "homepage": "https://github.com/GPU402/gpu402#readme",
+  "bugs": {
+    "url": "https://github.com/GPU402/gpu402/issues"
+  },
+  "author": "rythmern02"
+}

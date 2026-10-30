@@ -1,0 +1,32 @@
+{
+  "name": "gpu402-monorepo",
+  "private": true,
+  "description": "GPU402: rent a decentralized Lium (Bittensor SN51) GPU from TypeScript in one call, or pay per use with x402.",
+  "license": "MIT",
+  "type": "module",
+  "packageManager": "pnpm@11.10.0",
+  "engines": {
+    "node": ">=22.5"
+  },
+  "scripts": {
+    "build": "pnpm --filter gpu402 --filter @gpu402/tools run build",
+    "typecheck": "pnpm -r run typecheck",
+    "test": "pnpm --filter gpu402 --filter @gpu402/tools --filter @gpu402/gateway run test",
+    "gen:types": "pnpm --filter gpu402 run gen:types",
+    "setup:wallets": "tsx scripts/setup-wallets.ts",
+    "check:wallets": "tsx scripts/check-wallets.ts",
+    "gateway": "pnpm --filter @gpu402/gateway run dev",
+    "dashboard": "pnpm --filter @gpu402/dashboard run dev",
+    "demo:agent": "pnpm --filter @gpu402/agent-demo run start",
+    "demo:sdk": "pnpm --filter @gpu402/sdk-quickstart run start",
+    "dev": "pnpm --parallel --filter @gpu402/gateway --filter @gpu402/dashboard run dev"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "dotenv": "^18.0.9",
+    "tsx": "^4.23.15",
+    "typescript": "~5.9.3",
+    "viem": "^2.57.13",
+    "gpu402": "workspace:*"
+  }
+}
