@@ -17,7 +17,7 @@
 
 HTTP status 402, *Payment Required*, has been "reserved for future use" since 1997. GPU402 puts it to work.
 
-An AI agent asks for a GPU. The server answers `402` with a price. The agent signs a USDC payment from its own wallet and asks again. Its answer is a pod on [Lium](https://lium.io), the GPU marketplace that runs on Bittensor Subnet 51, with SSH ready. When the time it paid for runs out, the pod is gone. Nobody opened an account, and nobody typed a credit card number.
+An AI agent asks for a GPU. The server answers `402` with a price, in USDC on Base or in TAO on Bittensor. The agent signs a payment from its own wallet and asks again. Its answer is a pod on [Lium](https://lium.io), the GPU marketplace that runs on Bittensor Subnet 51, with SSH ready. When the time it paid for runs out, the pod is gone. Nobody opened an account, and nobody typed a credit card number.
 
 For developers who would rather hold a Lium API key themselves, the same machinery comes as a typed TypeScript SDK. Five lines rent the cheapest matching GPU on the network, run a job and give it back.
 
@@ -119,6 +119,8 @@ sequenceDiagram
 
 **Paid time starts at SSH, not at signature.** The agent's 15 minutes begin when the pod actually answers on its SSH port. Boot time is the gateway's cost, not the agent's.
 
+**Two currencies, one 402.** Every quote is offered in USDC on Base and in TAO on Bittensor EVM, at the same USD price, and the agent pays with whichever it holds. USDC goes through the public x402 facilitator as a gasless EIP-3009 authorization. TAO has no such authorization, so GPU402 adds an x402 scheme of its own, `native`. The agent signs a plain TAO transfer but doesn't broadcast it. The gateway checks the recipient, amount, signer, nonce and balance against Bittensor EVM, rents, and only then broadcasts the transfer. The TAO price is the median of four exchange feeds, fixed for the life of the quote. If those feeds go down, the TAO option drops out of the 402 and USDC keeps working. Because Lium accepts TAO top-ups, a gateway paid in TAO can fund its Lium account without leaving Bittensor.
+
 **Keys stay where they were born.** Agents bring an SSH public key and keep the private half. Payments are signed in the agent's process. To read a pod's SSH details, the agent proves it is the wallet that paid, with an EIP-191 signature tied to that one pod and valid for five minutes. The gateway holds only its own Lium key.
 
 **No money in, no 402 out.** Before quoting, the gateway checks that its Lium balance covers Lium's 15-minute rule for every running pod plus the new one. If it can't fund the rent, it says so and never asks for payment.
@@ -145,6 +147,7 @@ pnpm setup:wallets     # creates .env with a gateway wallet and an agent wallet 
 |---|---|
 | `LIUM_API_KEY` | lium.io → Access → API Keys, with `read`, `rent` and `manage` |
 | USDC for the agent | [faucet.circle.com](https://faucet.circle.com), Base Sepolia, to the agent address printed above |
+| Test TAO, optional | Requested in the Bittensor Discord. Send it to the agent's Substrate mirror address, which `pnpm check:wallets` prints; it shows up on the agent's Bittensor EVM address. Then set `AGENT_PAY_WITH=tao` |
 | `GOOGLE_GENERATIVE_AI_API_KEY` | [aistudio.google.com/apikey](https://aistudio.google.com/apikey). Or set `AGENT_PROVIDER=anthropic` and `ANTHROPIC_API_KEY` |
 | Gas for refunds, optional | A little Base Sepolia ETH on the gateway address |
 
@@ -195,6 +198,7 @@ const { tools, toolkit } = createGpuTools({
   mode: "x402",                                    // or "key", with a Lium API key
   gatewayUrl: process.env.GPU402_GATEWAY_URL,
   wallet: process.env.AGENT_PRIVATE_KEY as `0x${string}`,
+  payWith: "usdc",                                 // or "tao": the same key pays on Base and on Bittensor EVM
   maxUsdPerPayment: 1,
 });
 
@@ -239,7 +243,9 @@ docker run --env-file .env -p 4020:4020 -v gpu402-data:/app/apps/gateway/data gp
 | `MAX_ACTIVE_PODS` | `5` | Concurrency ceiling for the gateway's Lium account |
 | `RESERVE_USD` | `0.5` | Balance kept on top of Lium's 15-minute rule |
 | `START_TIMEOUT_MIN` | `12` | A pod not up by then is removed and refunded |
-| `REFUND_PRIVATE_KEY` | unset | The pay-to wallet's key; turns on on-chain refunds |
+| `TAO_PAYMENTS` | `true` | Also accept TAO on Bittensor EVM |
+| `TAO_NETWORK` | `eip155:945` | Bittensor EVM testnet. `eip155:964` is mainnet |
+| `REFUND_PRIVATE_KEY` | unset | The pay-to wallet's key; turns on on-chain refunds, in the asset the agent paid with |
 | `ALLOWED_GPUS` | all | Limit what you sell, e.g. `RTX 4090,RTX 3090` |
 
 Going from testnet to mainnet is a configuration change: switch the network, the facilitator, and the account that funds the rentals.
@@ -261,7 +267,7 @@ To report a vulnerability, open a private security advisory on this repository.
 `pnpm test` runs the SDK, tools and gateway suites. They exercise the real thing wherever a test can:
 
 - **SSH:** commands run over a genuine SSH connection to a local server.
-- **Payments:** every payment carries a real EIP-3009 signature, made by the same x402 client agents use and checked cryptographically by the test facilitator.
+- **Payments:** every USDC payment carries a real EIP-3009 signature, made by the same x402 client agents use and checked cryptographically by the test facilitator. TAO payments are real signed transactions, broadcast and mined on a local EVM node (Foundry's `anvil`) running Bittensor EVM's chain id. That includes TAO refunds sent back on-chain.
 - **Lium:** answers come from a server speaking Lium's exact wire format, so the cases that are hard to catch live can be forced: a node taken mid-rent, a pod that never boots, a gateway that crashes between renting and settling.
 - **The whole agent:** one test runs it from the first `402` to the last `DELETE`, with a real command executed on the pod in between.
 - **Live market:** a handful of read-only tests query Lium's live market. `GPU402_OFFLINE=1` skips them.
@@ -285,7 +291,7 @@ scripts            wallet setup and pre-flight checks
 
 ## Where it goes next
 
-The gateway pattern isn't specific to GPUs. Anything on Bittensor that has an API and a price can sit behind a 402. Inference on Chutes (SN64) and storage on Hippius (SN75) are the obvious next two. Before that come a hosted gateway with per-agent spend caps and team wallets, and a mainnet launch once Lium has agreed the resale terms.
+Native TAO payments on Bittensor mainnet are a configuration switch away (`TAO_NETWORK=eip155:964`). The gateway pattern isn't specific to GPUs. Anything on Bittensor that has an API and a price can sit behind a 402. Inference on Chutes (SN64) and storage on Hippius (SN75) are the obvious next two. Before that come a hosted gateway with per-agent spend caps and team wallets, and a mainnet launch once Lium has agreed the resale terms.
 
 <br>
 

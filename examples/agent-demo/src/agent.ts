@@ -18,7 +18,11 @@ const wallet = need("AGENT_PRIVATE_KEY") as Hex;
 const provider = process.env.AGENT_PROVIDER ?? (process.env.GOOGLE_GENERATIVE_AI_API_KEY ? "google" : "anthropic");
 need(provider === "google" ? "GOOGLE_GENERATIVE_AI_API_KEY" : "ANTHROPIC_API_KEY");
 
-const explorer = (network: string, tx: string) => `${network === "eip155:8453" ? "https://basescan.org" : "https://sepolia.basescan.org"}/tx/${tx}`;
+// Pay with USDC on Base (default) or TAO on Bittensor EVM: AGENT_PAY_WITH=tao
+const payWith = process.env.AGENT_PAY_WITH === "tao" ? "tao" : "usdc";
+const explorer = (network: string, tx: string) =>
+  ({ "eip155:84532": `https://sepolia.basescan.org/tx/${tx}`, "eip155:8453": `https://basescan.org/tx/${tx}`, "eip155:964": `https://evm.taostats.io/tx/${tx}` })[network] ??
+  `tx ${tx} on Bittensor EVM testnet`;
 let streaming = false;
 const onEvent = (e: ToolEvent) => {
   if (e.type === "stdout" || e.type === "stderr") {
@@ -31,7 +35,7 @@ const onEvent = (e: ToolEvent) => {
   streaming = false;
   const line = {
     renting: () => `${c.yellow}⇢ rentGpu: asking the gateway for ${e.type === "renting" && `${e.minutes} min of ${e.gpu}`}${c.reset}`,
-    paid: () => e.type === "paid" && `${c.green}✓ HTTP 402 answered: paid ${e.amountUsd.toFixed(6)} USDC  ${explorer(e.network, e.txHash)}${c.reset}`,
+    paid: () => e.type === "paid" && `${c.green}✓ HTTP 402 answered: paid $${e.amountUsd.toFixed(6)} in ${e.network.startsWith("eip155:9") ? "TAO" : "USDC"}  ${explorer(e.network, e.txHash)}${c.reset}`,
     rented: () => e.type === "rented" && `${c.green}✓ Lium pod ${e.podId} (${e.gpu}) is starting on a Bittensor SN51 miner${c.reset}`,
     waiting: () => e.type === "waiting" && `${c.dim}  … pod ${e.status.toLowerCase()}${c.reset}`,
     ready: () => e.type === "ready" && `${c.green}✓ GPU ready: ${e.ssh}  (paid until ${e.expiresAt?.slice(11, 19)} UTC)${c.reset}`,
@@ -40,7 +44,7 @@ const onEvent = (e: ToolEvent) => {
   console.log(line);
 };
 
-const { tools, toolkit } = createGpuTools({ mode: "x402", gatewayUrl, wallet, maxUsdPerPayment: 1, onEvent });
+const { tools, toolkit } = createGpuTools({ mode: "x402", gatewayUrl, wallet, maxUsdPerPayment: 1, payWith, onEvent });
 const modelId = process.env.AGENT_MODEL || (provider === "google" ? "gemini-3.5-flash" : "claude-sonnet-5-5");
 const model = provider === "google" ? createGoogleGenerativeAI()(modelId) : createAnthropic()(modelId);
 
@@ -51,7 +55,7 @@ const task =
     "TFLOPS with torch.matmul on 8192×8192 matrices (warm up, then time 20 iterations with torch.cuda.synchronize). " +
     "Report a short table of the results.";
 
-console.log(`${c.bold}GPU402 agent demo${c.reset}  model ${modelId}  wallet ${toolkit.gateway!.address}  gateway ${gatewayUrl}`);
+console.log(`${c.bold}GPU402 agent demo${c.reset}  model ${modelId}  pays in ${payWith.toUpperCase()}  wallet ${toolkit.gateway!.address}  gateway ${gatewayUrl}`);
 console.log(`${c.cyan}Task:${c.reset} ${task}\n`);
 
 try {

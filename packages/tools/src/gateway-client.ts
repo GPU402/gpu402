@@ -11,8 +11,9 @@ import {
   type GatewayRentRequest,
   type GatewayRentResponse,
 } from "gpu402";
-import type { Hex, LocalAccount } from "viem";
+import { parseEther, type Hex, type LocalAccount } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
+import { NATIVE_SCHEME, NativeTaoClientScheme, TAO_ASSET } from "./tao.js";
 
 export interface GatewayClientOptions {
   /** e.g. http://localhost:4020 */
@@ -21,8 +22,16 @@ export interface GatewayClientOptions {
   wallet: Hex | LocalAccount;
   /** Refuse any single payment above this many USD. Default $2. */
   maxUsdPerPayment?: number;
-  /** Networks to pay on (CAIP-2). Default Base Sepolia. */
+  /** Networks to pay USDC on (CAIP-2). Default Base Sepolia. */
   networks?: `${string}:${string}`[];
+  /** Pay with USDC (default) or with TAO on Bittensor EVM, when the gateway offers both. */
+  payWith?: "usdc" | "tao";
+  /** Bittensor EVM networks to pay TAO on. Default the testnet, eip155:945. */
+  taoNetworks?: `${string}:${string}`[];
+  /** RPC per Bittensor EVM network, if not the public endpoint. */
+  taoRpcUrls?: Record<string, string>;
+  /** Refuse any single TAO payment above this many TAO. Default 0.02. */
+  maxTaoPerPayment?: number;
   fetch?: typeof fetch;
 }
 
@@ -59,10 +68,25 @@ export class Gpu402Gateway {
     this.account = typeof opts.wallet === "string" ? privateKeyToAccount(opts.wallet) : opts.wallet;
     this.plainFetch = opts.fetch ?? globalThis.fetch;
     const networks = opts.networks ?? ["eip155:84532"];
+    const taoNetworks = opts.taoNetworks ?? ["eip155:945"];
+    const preferTao = opts.payWith === "tao";
+    const taoCap = parseEther(String(opts.maxTaoPerPayment ?? 0.02)).toString();
     const client = x402Client.fromConfig({
-      schemes: networks.map((network) => ({ network, client: new ExactEvmScheme(this.account) })),
-      spendControls: { maxAmountPerPayment: `$${opts.maxUsdPerPayment ?? 2}` },
-      policies: [(_v, reqs) => reqs.filter((r) => networks.includes(r.network as `${string}:${string}`))],
+      schemes: [
+        ...networks.map((network) => ({ network, client: new ExactEvmScheme(this.account) })),
+        ...taoNetworks.map((network) => ({ network, client: new NativeTaoClientScheme(this.account, opts.taoRpcUrls) as never })),
+      ],
+      spendControls: {
+        maxAmountPerPayment: `$${opts.maxUsdPerPayment ?? 2}`,
+        allowedAssets: taoNetworks.map((network) => ({ network, asset: TAO_ASSET, maxAmountPerPayment: taoCap })),
+      },
+      policies: [
+        (_v, reqs) =>
+          reqs.filter((r) =>
+            r.scheme === NATIVE_SCHEME ? taoNetworks.includes(r.network as `${string}:${string}`) : networks.includes(r.network as `${string}:${string}`),
+          ),
+      ],
+      paymentRequirementsSelector: (_v, reqs) => reqs.find((r) => (r.scheme === NATIVE_SCHEME) === preferTao) ?? reqs[0]!,
     });
     this.paidFetch = wrapFetchWithPayment(this.plainFetch, client);
   }

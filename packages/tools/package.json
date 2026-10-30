@@ -22,7 +22,11 @@
       "types": "./dist/langchain.d.ts",
       "import": "./dist/langchain.js"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./tao": {
+      "types": "./dist/tao.d.ts",
+      "import": "./dist/tao.js"
+    }
   },
   "files": [
     "dist",

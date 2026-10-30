@@ -4,6 +4,7 @@ import { createApp } from "./app.js";
 import { ChainReader, liumStatsReader } from "./chain.js";
 import { loadConfig } from "./config.js";
 import { Ledger } from "./db.js";
+import { TaoPriceOracle } from "./oracle.js";
 import { EventBus } from "./events.js";
 import { Pricing } from "./pricing.js";
 import { Refunder } from "./refunds.js";
@@ -13,7 +14,8 @@ const cfg = loadConfig();
 const lium = new Lium({ apiKey: cfg.LIUM_API_KEY ?? "", baseUrl: cfg.LIUM_BASE_URL, userAgent: "gpu402-gateway/0.1" });
 const ledger = new Ledger(cfg.DB_PATH);
 const bus = new EventBus(ledger);
-const pricing = new Pricing(lium, cfg);
+const oracle = new TaoPriceOracle();
+const pricing = new Pricing(lium, cfg, oracle);
 const refunder = new Refunder(cfg);
 const rentals = new RentalService(cfg, lium, ledger, bus, pricing, refunder);
 const chain = new ChainReader(cfg.SUBTENSOR_WS, cfg.NETUID);
@@ -25,12 +27,14 @@ const server = serve({ fetch: app.fetch, port: cfg.PORT }, (info) => {
   console.log(`  network      ${cfg.X402_NETWORK} via ${cfg.FACILITATOR_URL}`);
   console.log(`  payTo        ${cfg.GATEWAY_PAY_TO ?? "(not set: quoting only)"}`);
   console.log(`  Lium key     ${cfg.LIUM_API_KEY ? `${cfg.LIUM_API_KEY.slice(0, 6)}…` : "(not set: quoting only)"}`);
+  console.log(`  TAO          ${cfg.taoEnabled ? `on: ${cfg.TAO_NETWORK} → ${cfg.taoPayTo}` : "off"}`);
   console.log(`  refunds      ${refunder.enabled ? "on" : `off (${refunder.reason})`}`);
   console.log(`  margin       ${(cfg.MARGIN * 100).toFixed(0)}% · sweeper every ${cfg.SWEEP_INTERVAL_MS / 1000}s`);
 });
 
 rentals.start();
 void chain.stats().catch(() => {}); // warm the SN51 cache
+if (cfg.taoEnabled) void oracle.rate().then((r) => console.log(`  TAO/USD      $${r.usdPerTao.toFixed(2)} (${Object.keys(r.sources).join(", ")})`)).catch((e) => console.warn(`  TAO/USD      unavailable: ${e.message}`));
 
 let closing = false;
 for (const sig of ["SIGINT", "SIGTERM"] as const) {

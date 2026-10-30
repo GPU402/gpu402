@@ -7,7 +7,8 @@ import {
   type GatewayPodStatus,
   type Lium,
 } from "gpu402";
-import { explorerTx, type Config } from "./config.js";
+import { TAO_ASSET, formatTao } from "@gpu402/tools/tao";
+import { explorerTx, networkLabel, type Config } from "./config.js";
 import { ACTIVE_STATUSES, type Ledger, type PodRow } from "./db.js";
 import type { EventBus } from "./events.js";
 import type { GatewayQuote, Pricing, RentRequest } from "./pricing.js";
@@ -26,6 +27,10 @@ export interface Settlement {
   amountAtomic: string;
   amountUsd: number;
 }
+
+/** "0.096250 USDC" or "0.000412577 TAO (≈$0.0963)". */
+export const paidLabel = (s: Pick<Settlement, "asset" | "amountAtomic" | "amountUsd">) =>
+  s.asset === TAO_ASSET ? `${formatTao(s.amountAtomic, 9)} TAO (≈$${s.amountUsd.toFixed(4)})` : `${(Number(s.amountAtomic) / 1e6).toFixed(6)} USDC`;
 
 export const shortAddr = (a: string | null | undefined) => (a ? `${a.slice(0, 6)}…${a.slice(-4)}` : "unknown");
 const sshFingerprint = (key: string) =>
@@ -164,7 +169,7 @@ export class RentalService {
       created_at: Date.now(),
     });
     this.ledger.updatePod(podId, { status: "starting", payer: s.payer.toLowerCase() });
-    this.bus.emit("payment.settled", `Settled ${s.amountUsd.toFixed(6)} USDC from ${shortAddr(s.payer)} for ${pod.blocks_paid} block(s)`, {
+    this.bus.emit("payment.settled", `Settled ${paidLabel(s)} from ${shortAddr(s.payer)} on ${networkLabel(s.network)} for ${pod.blocks_paid} block(s)`, {
       podId,
       data: { tx: s.txHash, url: explorerTx(s.network, s.txHash), network: s.network },
     });
@@ -204,7 +209,7 @@ export class RentalService {
     );
     this.bus.emit(
       "pod.extended",
-      `Extended by ${blocks} block(s) for ${s.amountUsd.toFixed(6)} USDC${expiresAt ? `; now expires ${new Date(expiresAt).toISOString().slice(11, 19)} UTC` : ""}`,
+      `Extended by ${blocks} block(s) for ${paidLabel(s)}${expiresAt ? `; now expires ${new Date(expiresAt).toISOString().slice(11, 19)} UTC` : ""}`,
       { podId, data: { tx: s.txHash, url: explorerTx(s.network, s.txHash) } },
     );
   }
@@ -348,12 +353,12 @@ export class RentalService {
       return;
     }
     for (const p of payments) {
-      const usd = Math.floor(p.amount_usd * share * 1e6) / 1e6;
-      if (usd <= 0) continue;
+      if (share <= 0) continue;
       try {
-        const tx = await this.refunder.refund(p.asset, p.payer, usd);
+        const { tx, usd } = await this.refunder.refundPayment(p, share);
         this.ledger.markRefunded(p.id, tx, usd);
-        this.bus.emit("payment.refunded", `Refunded ${usd.toFixed(6)} USDC to ${shortAddr(p.payer)}`, {
+        const what = p.asset === TAO_ASSET ? `${formatTao((BigInt(p.amount_atomic) * BigInt(Math.floor(share * 1e6))) / 1_000_000n, 9)} TAO` : `${usd.toFixed(6)} USDC`;
+        this.bus.emit("payment.refunded", `Refunded ${what} to ${shortAddr(p.payer)} on ${networkLabel(p.network)}`, {
           podId: pod.id,
           data: { tx, url: explorerTx(p.network, tx) },
         });
@@ -395,6 +400,8 @@ export class RentalService {
         kind: p.kind,
         blocks: p.blocks,
         amountUsd: p.amount_usd,
+        asset: p.asset,
+        amount: p.asset === TAO_ASSET ? formatTao(p.amount_atomic, 9) : (Number(p.amount_atomic) / 1e6).toFixed(6),
         network: p.network,
         txHash: p.tx_hash,
         explorerUrl: explorerTx(p.network, p.tx_hash),

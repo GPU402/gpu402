@@ -1,6 +1,8 @@
+import { usdToTaoWei } from "@gpu402/tools/tao";
 import { BLOCK_MINUTES, normalizeGpuName, type Gpu, type Lium } from "gpu402";
 import { z } from "zod";
 import type { Config } from "./config.js";
+import type { TaoPriceOracle } from "./oracle.js";
 
 export const RentRequest = z.object({
   /** GPU model, e.g. "RTX 4090", "RTX4090", "H100". */
@@ -48,6 +50,8 @@ export interface GatewayQuote {
   nodesAvailable: number;
   quotedAt: number;
   validUntil: number;
+  /** The same price in TAO, fixed at quote time (absent when TAO payments are off or no rate is available). */
+  tao: { amountWei: string; usdPerTao: number } | null;
 }
 
 /** USDC has 6 decimals: work in integer micro-dollars and round up so we never undercharge. */
@@ -64,10 +68,38 @@ export class Pricing {
   private inflight: Promise<Gpu[]> | undefined;
   private readonly locks = new Map<string, GatewayQuote>();
 
+  private readonly extendLocks = new Map<string, { usd: number; taoWei: string | null; usdPerTao: number | null; validUntil: number }>();
+
   constructor(
     private readonly lium: Lium,
     private readonly cfg: Config,
+    private readonly oracle?: TaoPriceOracle,
   ) {}
+
+  /** USD → TAO at the current oracle rate; null when TAO payments are off or no rate is available. */
+  private async toTao(usd: number): Promise<{ amountWei: string; usdPerTao: number } | null> {
+    if (!this.cfg.taoEnabled || !this.oracle) return null;
+    try {
+      const { usdPerTao } = await this.oracle.rate();
+      return { amountWei: usdToTaoWei(usd, usdPerTao).toString(), usdPerTao };
+    } catch {
+      return null;
+    }
+  }
+
+  /** Locked price of extending a pod by `blocks`, in USD and TAO, so the 402 and the paid retry agree. */
+  async extendQuote(podId: string, blockPriceUsd: number, blocks: number) {
+    const key = `${podId}:${blocks}`;
+    const now = Date.now();
+    const locked = this.extendLocks.get(key);
+    if (locked && locked.validUntil > now) return locked;
+    const usd = fromMicros(toMicros(blockPriceUsd) * blocks);
+    const tao = await this.toTao(usd);
+    const q = { usd, taoWei: tao?.amountWei ?? null, usdPerTao: tao?.usdPerTao ?? null, validUntil: now + this.cfg.QUOTE_TTL_SEC * 1000 };
+    this.extendLocks.set(key, q);
+    for (const [k, v] of this.extendLocks) if (v.validUntil <= now) this.extendLocks.delete(k);
+    return q;
+  }
 
   /** Rentable nodes the gateway is willing to sell, refreshed at most every 30 s. */
   async gpus(force = false): Promise<Gpu[]> {
@@ -145,6 +177,7 @@ export class Pricing {
       nodesAvailable: match.length,
       quotedAt: now,
       validUntil: now + this.cfg.QUOTE_TTL_SEC * 1000,
+      tao: await this.toTao(fromMicros(totalMicros)),
     };
     this.locks.set(key, quote);
     for (const [k, v] of this.locks) if (v.validUntil <= now) this.locks.delete(k);

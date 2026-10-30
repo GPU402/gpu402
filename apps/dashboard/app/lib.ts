@@ -36,13 +36,16 @@ export interface PaymentView {
   kind: "rent" | "extend";
   blocks: number;
   amount_usd: number;
+  /** "TAO", or the USDC token contract. */
+  asset: string;
+  amount_atomic: string;
   payer: string;
   tx_hash: string;
   network: string;
   status: "settled" | "refunded";
   refund_usd: number | null;
   created_at: number;
-  explorerUrl: string;
+  explorerUrl: string | null;
   refundUrl: string | null;
 }
 
@@ -56,6 +59,7 @@ export interface GatewayState {
     canRent: boolean;
     liumBalanceUsd: number | null;
     facilitator: string;
+    tao: { network: string; label: string; payTo: string | null } | null;
   };
   totals: {
     payments: number;
@@ -118,7 +122,12 @@ export const clock = (secs: number) => {
   const s = Math.max(0, Math.floor(secs));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 };
-export const networkName = (n: string) => ({ "eip155:84532": "Base Sepolia", "eip155:8453": "Base" })[n] ?? n;
+export const networkName = (n: string) =>
+  ({ "eip155:84532": "Base Sepolia", "eip155:8453": "Base", "eip155:945": "Bittensor EVM testnet", "eip155:964": "Bittensor EVM" })[n] ?? n;
+
+/** "0.096250 USDC" or "0.000412577 TAO". TAO amounts are wei (18 decimals); USDC has 6. */
+export const paidAmount = (asset: string, atomic: string) =>
+  asset === "TAO" ? `${(Number(BigInt(atomic) / 1_000_000_000n) / 1e9).toFixed(9)} TAO` : `${(Number(atomic) / 1e6).toFixed(6)} USDC`;
 
 export async function getJson<T>(path: string): Promise<T> {
   const res = await fetch(`${GATEWAY}${path}`, { cache: "no-store" });

@@ -7,6 +7,7 @@ import {
   getJson,
   gpuName,
   networkName,
+  paidAmount,
   short,
   usd,
   type GatewayEvent,
@@ -88,7 +89,7 @@ export default function Dashboard() {
 
         <section className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
           <Kpi label="Active GPUs" value={s ? String(s.totals.activePods) : "—"} hint={s ? `${s.totals.pods} rented total` : ""} accent />
-          <Kpi label="USDC received (x402)" value={s ? `$${s.totals.usdcReceived.toFixed(4)}` : "—"} hint={s ? `${s.totals.payments} payments` : ""} tone="x402" />
+          <Kpi label="Received via x402" value={s ? `$${s.totals.usdcReceived.toFixed(4)}` : "—"} hint={s ? `${s.totals.payments} payments · USDC + TAO, in USD` : ""} tone="x402" />
           <Kpi label="GPU-minutes to Lium" value={s ? s.totals.gpuMinutesRouted.toFixed(1) : "—"} hint="served by SN51 miners" />
           <Kpi label="Paid to Lium miners" value={s ? usd(s.totals.liumSpendUsd) : "—"} hint="per-second billing" />
           <Kpi label="Gateway Lium balance" value={s ? usd(s.gateway.liumBalanceUsd, 2) : "—"} hint={s?.gateway.canRent ? "renting enabled" : "quote-only mode"} tone={s?.gateway.canRent ? undefined : "warn"} />
@@ -102,7 +103,7 @@ export default function Dashboard() {
             <Panel title="Live rentals" subtitle="Paid time starts when the pod is reachable; the sweeper removes it at expiry">
               <PodsTable pods={s?.pods ?? []} />
             </Panel>
-            <Panel title="x402 payments" subtitle={s ? `USDC on ${networkName(s.gateway.network)} · settled by ${s.gateway.facilitator.replace(/^https?:\/\//, "")}` : ""}>
+            <Panel title="x402 payments" subtitle={s ? `USDC on ${networkName(s.gateway.network)} via ${s.gateway.facilitator.replace(/^https?:\/\//, "")}${s.gateway.tao ? ` · TAO on ${s.gateway.tao.label}, settled by the gateway` : ""}` : ""}>
               <Payments s={s} />
             </Panel>
           </div>
@@ -162,9 +163,9 @@ function Header({ s, connected }: { s: GatewayState | null; connected: boolean }
         {s && (
           <>
             <span className="rounded-md border border-x402/40 bg-x402/10 px-2 py-1 text-x402">
-              {networkName(s.gateway.network)}
-              {s.gateway.testnet ? " · testnet USDC" : ""}
+              USDC · {networkName(s.gateway.network)}
             </span>
+            {s.gateway.tao && <span className="rounded-md border border-tao/40 bg-tao/10 px-2 py-1 text-tao">TAO · {s.gateway.tao.label}</span>}
             <span className="rounded-md border border-line-2 px-2 py-1 font-mono text-muted">payTo {short(s.gateway.payTo)}</span>
           </>
         )}
@@ -314,16 +315,23 @@ function Payments({ s }: { s: GatewayState | null }) {
       {payments.map((p) => (
         <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
           <div className="flex items-center gap-3">
-            <span className="tabular font-semibold text-x402">{p.amount_usd.toFixed(6)} USDC</span>
+            <span className={`tabular font-semibold ${p.asset === "TAO" ? "text-tao" : "text-x402"}`}>{paidAmount(p.asset, p.amount_atomic)}</span>
+            {p.asset === "TAO" && <span className="tabular text-xs text-faint">≈ ${p.amount_usd.toFixed(4)}</span>}
             <span className="text-xs text-muted">
               {p.kind === "rent" ? "rent" : "extend"} · {p.blocks} block{p.blocks === 1 ? "" : "s"} · pod {p.pod_id.slice(0, 8)} · from <span className="font-mono">{short(p.payer)}</span>
             </span>
             {p.status === "refunded" && <span className="rounded border border-warn/40 px-1.5 text-xs text-warn">refunded {usd(p.refund_usd)}</span>}
           </div>
           <div className="flex items-center gap-3 text-xs">
-            <a className="font-mono text-x402 hover:underline" href={p.explorerUrl} target="_blank" rel="noreferrer">
-              {short(p.tx_hash, 10, 6)} ↗
-            </a>
+            {p.explorerUrl ? (
+              <a className="font-mono text-x402 hover:underline" href={p.explorerUrl} target="_blank" rel="noreferrer">
+                {short(p.tx_hash, 10, 6)} ↗
+              </a>
+            ) : (
+              <span className="font-mono text-tao" title={`${p.tx_hash} on ${networkName(p.network)} (no public explorer)`}>
+                {short(p.tx_hash, 10, 6)}
+              </span>
+            )}
             {p.refundUrl && (
               <a className="font-mono text-warn hover:underline" href={p.refundUrl} target="_blank" rel="noreferrer">
                 refund ↗

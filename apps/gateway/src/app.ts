@@ -2,6 +2,7 @@ import { HTTPFacilitatorClient, type HTTPRequestContext } from "@x402/core/serve
 import { decodePaymentRequiredHeader, decodePaymentResponseHeader, decodePaymentSignatureHeader } from "@x402/core/http";
 import { ExactEvmScheme } from "@x402/evm/exact/server";
 import { paymentMiddleware, x402ResourceServer } from "@x402/hono";
+import { NATIVE_SCHEME, NativeTaoFacilitator, NativeTaoServerScheme, TAO_ASSET, TAO_DECIMALS, formatTao } from "@gpu402/tools/tao";
 import {
   BLOCK_MINUTES,
   LiumError,
@@ -19,7 +20,7 @@ import { secureHeaders } from "hono/secure-headers";
 import { streamSSE } from "hono/streaming";
 import { verifyOwnership } from "./auth.js";
 import type { ChainReader, LiumNetworkStats } from "./chain.js";
-import { explorerTx, isTestnet, type Config } from "./config.js";
+import { explorerTx, isTestnet, networkLabel, type Config } from "./config.js";
 import { ACTIVE_STATUSES, type Ledger, type PodRow } from "./db.js";
 import type { EventBus } from "./events.js";
 import { rateLimit } from "./limits.js";
@@ -47,6 +48,8 @@ export interface AppDeps {
   liumStats: () => Promise<LiumNetworkStats | null>;
   /** Override the facilitator (tests). */
   facilitator?: ConstructorParameters<typeof x402ResourceServer>[0];
+  /** Override the TAO facilitator (tests point it at a local chain). */
+  taoFacilitator?: NativeTaoFacilitator;
 }
 
 const err = (c: Context, status: number, code: string, message: string, extra: Record<string, unknown> = {}) =>
@@ -57,8 +60,9 @@ function readPayment(header: string | undefined) {
   if (!header) return null;
   try {
     const p = decodePaymentSignatureHeader(header);
-    const auth = (p.payload as { authorization?: { from?: string } }).authorization;
-    return { payer: auth?.from ?? null, asset: p.accepted.asset, amount: p.accepted.amount, network: p.accepted.network };
+    // USDC (exact): the payer is in the EIP-3009 authorization. TAO (native): it is the transaction's sender.
+    const payload = p.payload as { authorization?: { from?: string }; from?: string };
+    return { payer: payload.authorization?.from ?? payload.from ?? null, asset: p.accepted.asset, amount: p.accepted.amount, network: p.accepted.network };
   } catch {
     return null;
   }
@@ -76,7 +80,8 @@ function settlementFailureReason(c: Context): string {
   return `HTTP ${c.res.status}`;
 }
 
-function settlementOf(c: Context): Settlement | null {
+/** `usd` is the USD value of what was charged; for TAO it comes from the locked quote, for USDC from the amount itself. */
+function settlementOf(c: Context, usd?: number): Settlement | null {
   const header = c.res.headers.get("PAYMENT-RESPONSE") ?? c.res.headers.get("X-PAYMENT-RESPONSE");
   const paid = readPayment(c.req.header("payment-signature") ?? c.req.header("x-payment"));
   if (!header || !paid || c.res.status >= 400) return null;
@@ -90,7 +95,7 @@ function settlementOf(c: Context): Settlement | null {
       network: s.network ?? paid.network,
       asset: paid.asset,
       amountAtomic: atomic,
-      amountUsd: Number(atomic) / 1e6,
+      amountUsd: paid.asset === TAO_ASSET ? (usd ?? 0) : Number(atomic) / 1e6,
     };
   } catch {
     return null;
@@ -131,33 +136,61 @@ export function createApp(d: AppDeps) {
 
   // ----------------------------------------------------------------- x402 setup
   const payTo = cfg.GATEWAY_PAY_TO ?? "0x0000000000000000000000000000000000000000";
-  const resourceServer = new x402ResourceServer(d.facilitator ?? new HTTPFacilitatorClient({ url: cfg.FACILITATOR_URL })).register(
+  const taoNetwork = cfg.TAO_NETWORK as `${string}:${string}`;
+  const usdcFacilitator = d.facilitator ?? new HTTPFacilitatorClient({ url: cfg.FACILITATOR_URL });
+  // TAO payments are verified and settled by the gateway itself, straight against Bittensor EVM.
+  const taoFacilitator = cfg.taoEnabled
+    ? (d.taoFacilitator ?? new NativeTaoFacilitator({ networks: { [cfg.TAO_NETWORK]: cfg.TAO_RPC_URL } }))
+    : undefined;
+  const resourceServer = new x402ResourceServer(taoFacilitator ? [...[usdcFacilitator].flat(), taoFacilitator] : usdcFacilitator).register(
     cfg.X402_NETWORK as `${string}:${string}`,
     new ExactEvmScheme(),
   );
+  if (taoFacilitator) resourceServer.register(taoNetwork, new NativeTaoServerScheme() as never);
+
+  const taoPrice = (wei: string | null | undefined, usdPerTao: number | null | undefined) => {
+    if (!wei || !usdPerTao) throw new QuoteError("TAO pricing is unavailable right now (no TAO/USD rate); pay in USDC.");
+    return { amount: wei, asset: TAO_ASSET, extra: { symbol: "TAO", decimals: TAO_DECIMALS, usdPerTao } };
+  };
 
   const rentQuoteFromCtx = async (ctx: HTTPRequestContext) => {
     const body = RentRequest.parse(await (ctx.adapter.getBody?.() as Promise<unknown>));
     return pricing.quote(body);
   };
-  const extendPriceFromCtx = async (ctx: HTTPRequestContext) => {
+  const extendQuoteFromCtx = async (ctx: HTTPRequestContext) => {
     const id = ctx.path.split("/")[2] ?? "";
     const pod = ledger.getPod(id);
     const { blocks } = ExtendRequest.parse(await (ctx.adapter.getBody?.() as Promise<unknown>));
     if (!pod) throw new Error("unknown pod");
-    return money(fromMicros(toMicros(pod.block_price_usd) * blocks));
+    return pricing.extendQuote(pod.id, pod.block_price_usd, blocks);
   };
 
-  const payment = paymentMiddleware(
+  const usdcOption = (price: (ctx: HTTPRequestContext) => Promise<string>, maxTimeoutSeconds: number) => ({
+    scheme: "exact",
+    network: cfg.X402_NETWORK as `${string}:${string}`,
+    payTo,
+    price,
+    maxTimeoutSeconds,
+  });
+  const taoOption = (price: (ctx: HTTPRequestContext) => Promise<{ amount: string; asset: string; extra: Record<string, unknown> }>, maxTimeoutSeconds: number) => ({
+    scheme: NATIVE_SCHEME,
+    network: taoNetwork,
+    payTo: cfg.taoPayTo ?? payTo,
+    price,
+    maxTimeoutSeconds,
+  });
+
+  // Two middlewares: with and without the TAO option. A request gets the TAO one only when its quote has a
+  // locked TAO price, so a TAO/USD feed outage removes TAO from the 402 instead of breaking USDC payments.
+  const buildPayment = (withTao: boolean) => paymentMiddleware(
     {
       "POST /rent": {
-        accepts: {
-          scheme: "exact",
-          network: cfg.X402_NETWORK as `${string}:${string}`,
-          payTo,
-          price: async (ctx) => (await rentQuoteFromCtx(ctx)).price,
-          maxTimeoutSeconds: 300,
-        },
+        accepts: [
+          usdcOption(async (ctx) => (await rentQuoteFromCtx(ctx)).price, 300),
+          ...(withTao
+            ? [taoOption(async (ctx) => { const q = await rentQuoteFromCtx(ctx); return taoPrice(q.tao?.amountWei, q.tao?.usdPerTao); }, 300)]
+            : []),
+        ],
         description: "GPU402: prepaid 15-minute blocks of a Lium (Bittensor SN51) GPU with SSH access",
         mimeType: "application/json",
         serviceName: "GPU402",
@@ -167,20 +200,28 @@ export function createApp(d: AppDeps) {
             contentType: "application/json",
             body: {
               error: "payment_required",
-              message: `${q.blocks} block(s) of ${q.gpu}${q.gpuCount > 1 ? ` ×${q.gpuCount}` : ""} (${q.minutes} min) cost ${q.price} USDC. Retry with a signed x402 payment.`,
-              quote: { gpu: q.gpu, gpuCount: q.gpuCount, blocks: q.blocks, minutes: q.minutes, blockPriceUsd: q.blockPriceUsd, totalUsd: q.totalUsd, validUntil: new Date(q.validUntil).toISOString() },
+              message: `${q.blocks} block(s) of ${q.gpu}${q.gpuCount > 1 ? ` ×${q.gpuCount}` : ""} (${q.minutes} min) cost ${q.price} USDC${q.tao ? ` or ${formatTao(q.tao.amountWei)} TAO` : ""}. Retry with a signed x402 payment.`,
+              quote: {
+                gpu: q.gpu,
+                gpuCount: q.gpuCount,
+                blocks: q.blocks,
+                minutes: q.minutes,
+                blockPriceUsd: q.blockPriceUsd,
+                totalUsd: q.totalUsd,
+                ...(q.tao ? { totalTao: formatTao(q.tao.amountWei, 9), usdPerTao: q.tao.usdPerTao } : {}),
+                validUntil: new Date(q.validUntil).toISOString(),
+              },
             },
           };
         },
       },
       "POST /pods/:id/extend": {
-        accepts: {
-          scheme: "exact",
-          network: cfg.X402_NETWORK as `${string}:${string}`,
-          payTo,
-          price: extendPriceFromCtx,
-          maxTimeoutSeconds: 120,
-        },
+        accepts: [
+          usdcOption(async (ctx) => money((await extendQuoteFromCtx(ctx)).usd), 120),
+          ...(withTao
+            ? [taoOption(async (ctx) => { const q = await extendQuoteFromCtx(ctx); return taoPrice(q.taoWei, q.usdPerTao); }, 120)]
+            : []),
+        ],
         description: "GPU402: add prepaid 15-minute blocks to a running pod",
         mimeType: "application/json",
         serviceName: "GPU402",
@@ -189,9 +230,12 @@ export function createApp(d: AppDeps) {
     resourceServer,
   );
 
+  const usdcOnly = buildPayment(false);
+  const usdcAndTao = taoFacilitator ? buildPayment(true) : usdcOnly;
+
   /** Runs the x402 middleware inline; a response it returns (402, errors) becomes the final response. */
-  const runPayment = async (c: Context<Env>, next: () => Promise<void>) => {
-    const out = await payment(c, next);
+  const runPayment = async (c: Context<Env>, next: () => Promise<void>, taoPriced: boolean) => {
+    const out = await (taoPriced ? usdcAndTao : usdcOnly)(c, next);
     if (out instanceof Response) c.res = out;
   };
 
@@ -199,8 +243,12 @@ export function createApp(d: AppDeps) {
   app.get("/", (c) =>
     c.json({
       name: "GPU402",
-      description: "Rent a decentralized Lium (Bittensor Subnet 51) GPU per use with x402. No account, just a USDC wallet.",
+      description: "Rent a decentralized Lium (Bittensor Subnet 51) GPU per use with x402. No account: pay with USDC on Base or TAO on Bittensor.",
       network: cfg.X402_NETWORK,
+      payments: [
+        { scheme: "exact", network: cfg.X402_NETWORK, label: networkLabel(cfg.X402_NETWORK), asset: "USDC" },
+        ...(cfg.taoEnabled ? [{ scheme: NATIVE_SCHEME, network: cfg.TAO_NETWORK, label: networkLabel(cfg.TAO_NETWORK), asset: "TAO", payTo: cfg.taoPayTo }] : []),
+      ],
       testnet: isTestnet(cfg.X402_NETWORK),
       payTo: cfg.GATEWAY_PAY_TO ?? null,
       blockMinutes: BLOCK_MINUTES,
@@ -248,6 +296,9 @@ export function createApp(d: AppDeps) {
         validUntil: new Date(q.validUntil).toISOString(),
         network: cfg.X402_NETWORK,
         payTo: cfg.GATEWAY_PAY_TO ?? null,
+        ...(q.tao
+          ? { tao: { network: cfg.TAO_NETWORK, payTo: cfg.taoPayTo ?? null, amount: formatTao(q.tao.amountWei, 9), amountWei: q.tao.amountWei, usdPerTao: q.tao.usdPerTao } }
+          : {}),
       };
       return c.json(body);
     } catch (e) {
@@ -286,7 +337,7 @@ export function createApp(d: AppDeps) {
   /** Wraps x402: settle → the pod is the payer's; settlement fails → the pod is removed and nothing is charged. */
   const paidRent: MiddlewareHandler<Env> = async (c, next) => {
     const hadPayment = Boolean(c.req.header("payment-signature") ?? c.req.header("x-payment"));
-    await runPayment(c, next);
+    await runPayment(c, next, Boolean(c.get("quote").tao));
     const rented = c.get("rented");
     if (!hadPayment && c.res.status === 402) {
       const q = c.get("quote");
@@ -302,7 +353,7 @@ export function createApp(d: AppDeps) {
       bus.emit("payment.rejected", `Payment from ${shortAddr(payer)} refused by the facilitator (${reason}); nothing rented`);
     }
     if (!rented) return;
-    const s = settlementOf(c);
+    const s = settlementOf(c, c.get("quote").totalUsd);
     if (s) rentals.confirmRent(rented.id, s);
     else await rentals.abandonRent(rented.id, settlementFailureReason(c));
   };
@@ -352,8 +403,10 @@ export function createApp(d: AppDeps) {
   };
 
   const paidExtend: MiddlewareHandler<Env> = async (c, next) => {
-    await runPayment(c, next);
-    const s = c.res.status < 400 ? settlementOf(c) : null;
+    const pod = c.get("pod");
+    await runPayment(c, next, Boolean((await pricing.extendQuote(pod.id, pod.block_price_usd, c.get("extendBlocks"))).taoWei));
+    const usd = c.res.status < 400 ? (await pricing.extendQuote(pod.id, pod.block_price_usd, c.get("extendBlocks"))).usd : 0;
+    const s = c.res.status < 400 ? settlementOf(c, usd) : null;
     if (s) await rentals.confirmExtend(c.get("pod").id, c.get("extendBlocks"), s);
   };
 
@@ -402,6 +455,7 @@ export function createApp(d: AppDeps) {
         canRent: rentals.canRent,
         liumBalanceUsd: await rentals.liumBalance(),
         facilitator: cfg.FACILITATOR_URL,
+        tao: cfg.taoEnabled ? { network: cfg.TAO_NETWORK, label: networkLabel(cfg.TAO_NETWORK), payTo: cfg.taoPayTo ?? null } : null,
       },
       totals: ledger.totals(),
       spendByAgent: ledger.spendByPayer(),

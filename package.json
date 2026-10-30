@@ -22,11 +22,13 @@
     "dev": "pnpm --parallel --filter @gpu402/gateway --filter @gpu402/dashboard run dev"
   },
   "devDependencies": {
+    "@polkadot/util": "^14.0.3",
+    "@polkadot/util-crypto": "^14.0.3",
     "@types/node": "^24.0.0",
     "dotenv": "^18.0.9",
+    "gpu402": "workspace:*",
     "tsx": "^4.23.15",
     "typescript": "~5.9.3",
-    "viem": "^2.57.13",
-    "gpu402": "workspace:*"
+    "viem": "^2.57.13"
   }
 }

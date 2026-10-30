@@ -31,9 +31,14 @@ export interface GatewayPayment {
   kind: "rent" | "extend";
   blocks: number;
   amountUsd: number;
+  /** "TAO", or the token contract for USDC. */
+  asset: string;
+  /** Human amount in the asset paid, e.g. "0.096250" USDC or "0.000412577" TAO. */
+  amount: string;
   network: string;
   txHash: string;
-  explorerUrl: string;
+  /** Null on networks with no public explorer (Bittensor EVM testnet). */
+  explorerUrl: string | null;
   status: "settled" | "refunded";
   refundTx: string | null;
 }
@@ -76,4 +81,6 @@ export interface GatewayQuoteResponse {
   validUntil: string;
   network: string;
   payTo: string | null;
+  /** The same price in TAO on Bittensor EVM, when the gateway accepts TAO. */
+  tao?: { network: string; payTo: string | null; amount: string; amountWei: string; usdPerTao: number };
 }

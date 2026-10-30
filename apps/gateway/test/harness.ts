@@ -12,8 +12,10 @@ import { createApp } from "../src/app.js";
 import { loadConfig } from "../src/config.js";
 import { Ledger } from "../src/db.js";
 import { EventBus } from "../src/events.js";
+import { NativeTaoFacilitator } from "@gpu402/tools/tao";
+import type { TaoPriceOracle } from "../src/oracle.js";
 import { Pricing } from "../src/pricing.js";
-import type { Refunder } from "../src/refunds.js";
+import { Refunder } from "../src/refunds.js";
 import { RentalService } from "../src/rentals.js";
 
 export const NETWORK = "eip155:84532";
@@ -40,6 +42,10 @@ export interface HarnessOptions {
   sshCommand?: string;
   env?: Record<string, string>;
   refunds?: boolean;
+  /** Accept TAO on a local EVM chain at a fixed TAO/USD rate. */
+  tao?: { rpcUrl: string; usdPerTao: number };
+  /** Use the real Refunder with this pay-to key (refunds are sent on chain). */
+  refundKey?: `0x${string}`;
 }
 
 export async function createHarness(opts: HarnessOptions = {}) {
@@ -162,7 +168,7 @@ export async function createHarness(opts: HarnessOptions = {}) {
     },
   };
 
-  const payTo = privateKeyToAccount(generatePrivateKey()).address;
+  const payTo = privateKeyToAccount(opts.refundKey ?? generatePrivateKey()).address;
   const cfg = loadConfig({
     LIUM_API_KEY: "sk_test",
     LIUM_BASE_URL: `http://127.0.0.1:${(liumServer.address() as AddressInfo).port}`,
@@ -170,24 +176,32 @@ export async function createHarness(opts: HarnessOptions = {}) {
     DB_PATH: ":memory:",
     PUBLIC_URL: "http://gateway.test",
     MAX_ACTIVE_PODS: "3",
+    TAO_PAYMENTS: opts.tao ? "true" : "false",
+    ...(opts.refundKey ? { REFUND_PRIVATE_KEY: opts.refundKey } : {}),
+    ...(opts.tao ? { TAO_RPC_URL: opts.tao.rpcUrl } : {}),
     ...opts.env,
   } as NodeJS.ProcessEnv);
   const refunds: { asset: string; to: string; usd: number }[] = [];
-  const refunder = {
+  const stubRefunder = {
     enabled: opts.refunds ?? false,
     reason: opts.refunds ? undefined : "disabled in test",
-    async refund(asset: string, to: string, usd: number) {
-      refunds.push({ asset, to, usd });
-      return keccak256(toHex(`refund-${refunds.length}`));
+    async refundPayment(p: { asset: string; payer: string; amount_usd: number }, share: number) {
+      const usd = Math.floor(p.amount_usd * share * 1e6) / 1e6;
+      refunds.push({ asset: p.asset, to: p.payer, usd });
+      return { tx: keccak256(toHex(`refund-${refunds.length}`)), usd };
     },
   } as unknown as Refunder;
+  const refunder = opts.refundKey ? new Refunder(cfg) : stubRefunder;
 
   const client = new Lium({ apiKey: cfg.LIUM_API_KEY, baseUrl: cfg.LIUM_BASE_URL, retry: { maxRetries: 0 } });
   const ledger = new Ledger(":memory:");
   const bus = new EventBus(ledger);
-  const pricing = new Pricing(client, cfg);
+  // A fixed TAO/USD rate stands in for the exchange feeds, so amounts are deterministic.
+  const oracle = opts.tao ? ({ rate: async () => ({ usdPerTao: opts.tao!.usdPerTao, sources: { test: opts.tao!.usdPerTao }, at: Date.now() }) } as unknown as TaoPriceOracle) : undefined;
+  const pricing = new Pricing(client, cfg, oracle);
+  const taoFacilitator = opts.tao ? new NativeTaoFacilitator({ networks: { [cfg.TAO_NETWORK]: opts.tao.rpcUrl }, confirmTimeoutMs: 10_000 }) : undefined;
   const rentals = new RentalService(cfg, client, ledger, bus, pricing, refunder);
-  const app = createApp({ cfg, lium: client, ledger, bus, pricing, rentals, chain: { stats: async () => ({}) } as never, liumStats: async () => null, facilitator });
+  const app = createApp({ cfg, lium: client, ledger, bus, pricing, rentals, chain: { stats: async () => ({}) } as never, liumStats: async () => null, facilitator, taoFacilitator });
   const gatewayFetch: typeof fetch = async (input, init) => app.fetch(new Request(input, init));
 
   return {

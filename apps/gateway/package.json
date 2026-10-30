@@ -24,11 +24,11 @@
     "hono": "^4.13.14",
     "viem": "^2.57.13",
     "zod": "^4.6.7",
-    "tsx": "^4.23.15"
+    "tsx": "^4.23.15",
+    "@gpu402/tools": "workspace:*"
   },
   "devDependencies": {
     "@x402/fetch": "^2.29.0",
-    "vitest": "^5.0.5",
-    "@gpu402/tools": "workspace:*"
+    "vitest": "^5.0.5"
   }
 }

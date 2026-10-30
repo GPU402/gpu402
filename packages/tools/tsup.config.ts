@@ -1,7 +1,7 @@
 import { defineConfig } from "tsup";
 
 export default defineConfig({
-  entry: { index: "src/index.ts", ai: "src/ai.ts", langchain: "src/langchain.ts" },
+  entry: { index: "src/index.ts", ai: "src/ai.ts", langchain: "src/langchain.ts", tao: "src/tao.ts" },
   format: ["esm"],
   dts: true,
   clean: true,

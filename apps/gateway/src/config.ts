@@ -25,6 +25,13 @@ const Env = z.object({
   /** CAIP-2 network. Base Sepolia for the demo; eip155:8453 is Base mainnet. */
   X402_NETWORK: z.string().regex(/^eip155:\d+$/).default("eip155:84532"),
   FACILITATOR_URL: z.url().default("https://x402.org/facilitator"),
+  /** Also accept TAO on Bittensor EVM (x402 "native" scheme), next to USDC. */
+  TAO_PAYMENTS: optional(bool),
+  /** Bittensor EVM network: eip155:945 is the testnet, eip155:964 mainnet. */
+  TAO_NETWORK: z.enum(["eip155:945", "eip155:964"]).default("eip155:945"),
+  TAO_RPC_URL: optional(z.url()),
+  /** Where agents' TAO goes; defaults to GATEWAY_PAY_TO (the same key controls both chains). */
+  TAO_PAY_TO: optional(address),
   /** Optional private key of GATEWAY_PAY_TO, used only to refund agents whose pod never started. */
   REFUND_PRIVATE_KEY: optional(z.string().regex(/^0x[0-9a-fA-F]{64}$/)),
   EVM_RPC_URL: optional(z.url()),
@@ -53,7 +60,7 @@ const Env = z.object({
   NETUID: z.coerce.number().int().default(51),
 });
 
-export type Config = z.infer<typeof Env> & { allowedGpus: string[] };
+export type Config = z.infer<typeof Env> & { allowedGpus: string[]; taoEnabled: boolean; taoPayTo: string | undefined };
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const parsed = Env.safeParse(env);
@@ -65,15 +72,24 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   return {
     ...c,
     allowedGpus: c.ALLOWED_GPUS.split(",").map((s) => s.trim()).filter(Boolean),
+    taoEnabled: c.TAO_PAYMENTS ?? true,
+    taoPayTo: c.TAO_PAY_TO ?? c.GATEWAY_PAY_TO,
   };
 }
 
 export const isTestnet = (network: string) => ["eip155:84532", "eip155:11155111"].includes(network);
 
-export function explorerTx(network: string, tx: string): string {
-  const base: Record<string, string> = {
-    "eip155:84532": "https://sepolia.basescan.org",
-    "eip155:8453": "https://basescan.org",
+/** Block explorer link for a transaction, or null where the network has no public explorer (Bittensor EVM testnet). */
+export function explorerTx(network: string, tx: string): string | null {
+  const base: Record<string, string | null> = {
+    "eip155:84532": "https://sepolia.basescan.org/tx/",
+    "eip155:8453": "https://basescan.org/tx/",
+    "eip155:964": "https://evm.taostats.io/tx/",
+    "eip155:945": null,
   };
-  return `${base[network] ?? "https://sepolia.basescan.org"}/tx/${tx}`;
+  const b = network in base ? base[network] : "https://sepolia.basescan.org/tx/";
+  return b ? `${b}${tx}` : null;
 }
+
+export const networkLabel = (network: string) =>
+  ({ "eip155:84532": "Base Sepolia", "eip155:8453": "Base", "eip155:945": "Bittensor EVM testnet", "eip155:964": "Bittensor EVM" })[network] ?? network;

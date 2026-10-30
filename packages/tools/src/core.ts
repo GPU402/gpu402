@@ -17,6 +17,10 @@ export type GpuToolsOptions =
       wallet: Hex | LocalAccount;
       maxUsdPerPayment?: number;
       networks?: `${string}:${string}`[];
+      /** Pay with USDC on Base (default) or TAO on Bittensor EVM. */
+      payWith?: "usdc" | "tao";
+      taoRpcUrls?: Record<string, string>;
+      maxTaoPerPayment?: number;
       /** Custom fetch for reaching the gateway (proxies, tests). */
       fetch?: typeof fetch;
       sshKey?: SshKeyPair;
@@ -40,8 +44,12 @@ interface RentedPod {
 }
 
 /** Block explorer link for a settlement, from the PAYMENT-RESPONSE receipt (the 201 body is written before settlement). */
-const explorerTx = (network: string, tx: string) =>
-  `${network === "eip155:8453" ? "https://basescan.org" : "https://sepolia.basescan.org"}/tx/${tx}`;
+const explorerTx = (network: string, tx: string): string | null =>
+  ({
+    "eip155:84532": `https://sepolia.basescan.org/tx/${tx}`,
+    "eip155:8453": `https://basescan.org/tx/${tx}`,
+    "eip155:964": `https://evm.taostats.io/tx/${tx}`,
+  })[network] ?? null;
 
 const tail = (s: string, n = 6_000) => (s.length > n ? `…(${s.length - n} earlier characters omitted)…\n${s.slice(-n)}` : s);
 
@@ -72,7 +80,16 @@ export class GpuToolkit {
     this.sshKey = opts.sshKey ?? generateSshKeyPair("gpu402-agent");
     this.emit = opts.onEvent ?? (() => {});
     if (opts.mode === "x402") {
-      this.gateway = new Gpu402Gateway({ url: opts.gatewayUrl, wallet: opts.wallet, maxUsdPerPayment: opts.maxUsdPerPayment, networks: opts.networks, fetch: opts.fetch });
+      this.gateway = new Gpu402Gateway({
+        url: opts.gatewayUrl,
+        wallet: opts.wallet,
+        maxUsdPerPayment: opts.maxUsdPerPayment,
+        networks: opts.networks,
+        payWith: opts.payWith,
+        taoRpcUrls: opts.taoRpcUrls,
+        maxTaoPerPayment: opts.maxTaoPerPayment,
+        fetch: opts.fetch,
+      });
     } else {
       this.lium = opts.lium ?? new Lium({ apiKey: opts.apiKey, budgetUsd: opts.budgetUsd });
       this.maxUsdPerGpuHour = opts.maxUsdPerGpuHour;

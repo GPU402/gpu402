@@ -2,6 +2,8 @@
 import "dotenv/config";
 import { Lium } from "gpu402";
 import { createPublicClient, erc20Abi, formatEther, formatUnits, http, type Hex } from "viem";
+import { blake2AsU8a, encodeAddress } from "@polkadot/util-crypto";
+import { hexToU8a, stringToU8a, u8aConcat } from "@polkadot/util";
 import { privateKeyToAccount } from "viem/accounts";
 import { baseSepolia } from "viem/chains";
 
@@ -44,6 +46,19 @@ if (process.env.LIUM_API_KEY) {
 } else {
   ready = false;
   console.log(`${ok(false)} LIUM_API_KEY not set (lium.io → Access → API Keys)`);
+}
+
+// TAO on Bittensor EVM (optional second payment rail).
+if (process.env.TAO_PAYMENTS !== "false" && agentKey) {
+  const network = process.env.TAO_NETWORK || "eip155:945";
+  const rpc = process.env.TAO_RPC_URL || (network === "eip155:964" ? "https://lite.chain.opentensor.ai" : "https://test.chain.opentensor.ai");
+  const tao = createPublicClient({ transport: http(rpc) });
+  const agentAddr = privateKeyToAccount(agentKey).address;
+  const mirror = (h160: string) => encodeAddress(blake2AsU8a(u8aConcat(stringToU8a("evm:"), hexToU8a(h160))), 42);
+  const [a, g] = await Promise.all([tao.getBalance({ address: agentAddr }), tao.getBalance({ address: (process.env.TAO_PAY_TO || process.env.GATEWAY_PAY_TO) as Hex })]);
+  const ta = Number(formatEther(a));
+  console.log(`${ok(ta >= 0.01)} TAO (${network}) agent ${agentAddr}: ${ta.toFixed(6)} TAO${ta >= 0.01 ? "" : `  (optional: send test TAO to its Substrate mirror ${mirror(agentAddr)})`}`);
+  console.log(`  TAO (${network}) gateway: ${Number(formatEther(g)).toFixed(6)} TAO`);
 }
 
 const fac = process.env.FACILITATOR_URL || "https://x402.org/facilitator";
