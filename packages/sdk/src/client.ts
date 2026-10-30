@@ -9,7 +9,7 @@ import {
   errorFromResponse,
 } from "./errors.js";
 import type { components, paths } from "./generated/lium.js";
-import { filterGpus, toGpu, type Gpu, type GpuFilter, type LiumExecutor } from "./gpu.js";
+import { filterGpus, minRentableGpus, toGpu, type Gpu, type GpuFilter, type LiumExecutor } from "./gpu.js";
 import { createRetryingFetch, sleep, type RetryOptions } from "./http.js";
 import { TERMINAL_POD_STATUSES, toPod, type Pod } from "./pod.js";
 import { sshExec, waitForPort, type ExecOptions, type ExecResult } from "./ssh.js";
@@ -178,7 +178,7 @@ export class Lium {
     let gpuCount = opts.gpuCount ?? (typeof node === "string" ? undefined : Math.max(node.minGpuCount, 1));
     if (gpuCount === undefined) {
       const found = (await this.executors()).find((e) => e.id === executorId);
-      gpuCount = Math.max(found?.min_gpu_count_for_rental ?? 1, 1);
+      gpuCount = found ? minRentableGpus(found) : 1;
     }
     const r = await this.api.GET("/executors/{executor_uuid}/quote", {
       params: { path: { executor_uuid: executorId }, query: { hours: minutes / 60, gpu_count: gpuCount } },
@@ -458,8 +458,19 @@ export class Lium {
       return { stopped: false, spentUsd };
     }
     this.unwrap(r, "DELETE /pods/{id}");
+    // The pod's live spend lags Lium's billing ticks; its statement is billed to the second and outlives the pod.
+    const billed = await this.statement(podId).catch(() => null);
+    if (billed) spentUsd = Math.max(spentUsd ?? 0, billed.totalUsd);
     this.guard?.close(podId, spentUsd ?? undefined);
     return { stopped: true, spentUsd };
+  }
+
+  /** What Lium billed for a pod, from its billing ledger. Available after the pod is removed. */
+  async statement(podId: string): Promise<{ totalUsd: number; billedSeconds: number; billedUntil: string | null; raw: unknown }> {
+    this.requireKey("statement");
+    const r = await this.api.GET("/pods/{id}/statement", { params: { path: { id: podId } } });
+    const s = this.unwrap(r, "GET /pods/{id}/statement") as { total?: number; billed_seconds?: number; billed_until?: string | null };
+    return { totalUsd: Number(s?.total ?? 0), billedSeconds: Number(s?.billed_seconds ?? 0), billedUntil: s?.billed_until ?? null, raw: s };
   }
 
   /**

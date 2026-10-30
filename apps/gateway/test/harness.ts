@@ -120,7 +120,7 @@ export async function createHarness(opts: HarnessOptions = {}) {
   await new Promise<void>((r) => liumServer.listen(0, "127.0.0.1", r));
 
   const facilitatorLog: string[] = [];
-  const control = { settleFails: false };
+  const control = { settleFails: false, unfunded: new Set<string>() };
   const facilitator: FacilitatorClient = {
     async getSupported() {
       return { kinds: [{ x402Version: 2, scheme: "exact", network: NETWORK }], extensions: [], signers: {} };
@@ -148,6 +148,10 @@ export async function createHarness(opts: HarnessOptions = {}) {
           signature,
         }));
       facilitatorLog.push(`verify:${valid}:${r.amount}`);
+      if (valid && control.unfunded.has(a.from!.toLowerCase())) {
+        // Same reason code the public facilitator returns for a wallet without enough USDC.
+        return { isValid: false, invalidReason: "invalid_exact_evm_insufficient_balance", payer: a.from };
+      }
       return valid ? { isValid: true, payer: a.from } : { isValid: false, invalidReason: "invalid_signature", payer: a.from };
     },
     async settle(p: PaymentPayload, r: PaymentRequirements) {

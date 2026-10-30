@@ -25,8 +25,9 @@ export {
   LiumSSHError,
   BudgetExceededError,
   errorFromResponse,
+  NODE_TAKEN_CODES,
 } from "./errors.js";
-export { filterGpus, gpuMatches, normalizeGpuName, toGpu } from "./gpu.js";
+export { filterGpus, gpuMatches, minRentableGpus, normalizeGpuName, toGpu } from "./gpu.js";
 export type { Gpu, GpuFilter, LiumExecutor } from "./gpu.js";
 export { parseSshCommand, toPod, TERMINAL_POD_STATUSES } from "./pod.js";
 export type { Pod, SshTarget } from "./pod.js";

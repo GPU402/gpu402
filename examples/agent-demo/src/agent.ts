@@ -41,7 +41,7 @@ const onEvent = (e: ToolEvent) => {
 };
 
 const { tools, toolkit } = createGpuTools({ mode: "x402", gatewayUrl, wallet, maxUsdPerPayment: 1, onEvent });
-const modelId = process.env.AGENT_MODEL || (provider === "google" ? "gemini-flash-latest" : "claude-sonnet-5-5");
+const modelId = process.env.AGENT_MODEL || (provider === "google" ? "gemini-3.5-flash" : "claude-sonnet-5-5");
 const model = provider === "google" ? createGoogleGenerativeAI()(modelId) : createAnthropic()(modelId);
 
 const task =

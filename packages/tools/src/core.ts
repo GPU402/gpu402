@@ -39,6 +39,10 @@ interface RentedPod {
   expiresAt: string | null;
 }
 
+/** Block explorer link for a settlement, from the PAYMENT-RESPONSE receipt (the 201 body is written before settlement). */
+const explorerTx = (network: string, tx: string) =>
+  `${network === "eip155:8453" ? "https://basescan.org" : "https://sepolia.basescan.org"}/tx/${tx}`;
+
 const tail = (s: string, n = 6_000) => (s.length > n ? `…(${s.length - n} earlier characters omitted)…\n${s.slice(-n)}` : s);
 
 export const rentGpuInput = z.object({
@@ -108,7 +112,7 @@ export class GpuToolkit {
         gpu: pod.gpu,
         paidUsd: data.quote.totalUsd,
         paymentTx: payment?.txHash ?? null,
-        paymentExplorer: data.payments[0]?.explorerUrl ?? null,
+        paymentExplorer: payment ? explorerTx(payment.network, payment.txHash) : null,
         readyInSeconds: Math.round((Date.now() - started) / 1000),
         expiresAt: pod.expiresAt,
         ssh: ready.ssh!.command,

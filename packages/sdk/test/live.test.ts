@@ -5,7 +5,7 @@ import { Lium } from "../src/index.js";
 
 const offline = process.env.GPU402_OFFLINE === "1";
 
-describe.skipIf(offline)("live Lium API (read-only)", () => {
+describe.skipIf(offline)("live Lium API (read-only)", { timeout: 30_000 }, () => {
   const lium = new Lium({ apiKey: "" });
 
   it("lists rentable GPUs, cheapest first", async () => {

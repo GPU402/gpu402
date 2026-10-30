@@ -1,10 +1,12 @@
 import { HTTPFacilitatorClient, type HTTPRequestContext } from "@x402/core/server";
-import { decodePaymentResponseHeader, decodePaymentSignatureHeader } from "@x402/core/http";
+import { decodePaymentRequiredHeader, decodePaymentResponseHeader, decodePaymentSignatureHeader } from "@x402/core/http";
 import { ExactEvmScheme } from "@x402/evm/exact/server";
 import { paymentMiddleware, x402ResourceServer } from "@x402/hono";
 import {
   BLOCK_MINUTES,
   LiumError,
+  LiumNoMatchError,
+  NODE_TAKEN_CODES,
   OWNERSHIP_HEADERS,
   type GatewayQuoteResponse,
   type GatewayRentResponse,
@@ -60,6 +62,18 @@ function readPayment(header: string | undefined) {
   } catch {
     return null;
   }
+}
+
+/** Why a settlement failed, as the facilitator reported it in the PAYMENT-RESPONSE header. */
+function settlementFailureReason(c: Context): string {
+  const header = c.res.headers.get("PAYMENT-RESPONSE") ?? c.res.headers.get("X-PAYMENT-RESPONSE");
+  try {
+    if (header) {
+      const s = decodePaymentResponseHeader(header);
+      if (s.errorReason) return s.errorMessage && s.errorMessage !== s.errorReason ? `${s.errorReason}: ${s.errorMessage}` : s.errorReason;
+    }
+  } catch {}
+  return `HTTP ${c.res.status}`;
 }
 
 function settlementOf(c: Context): Settlement | null {
@@ -278,10 +292,19 @@ export function createApp(d: AppDeps) {
       const q = c.get("quote");
       bus.emit("quote.issued", `402 quote: ${q.blocks} × 15 min of ${q.gpu} = ${q.price} USDC`, { data: { totalUsd: q.totalUsd } });
     }
+    if (hadPayment && !rented && c.res.status === 402) {
+      // The facilitator refused the signed payment (e.g. not enough USDC): say why, nothing was rented.
+      let reason = "rejected";
+      try {
+        reason = decodePaymentRequiredHeader(c.res.headers.get("PAYMENT-REQUIRED") ?? "").error ?? reason;
+      } catch {}
+      const payer = readPayment(c.req.header("payment-signature") ?? c.req.header("x-payment"))?.payer ?? null;
+      bus.emit("payment.rejected", `Payment from ${shortAddr(payer)} refused by the facilitator (${reason}); nothing rented`);
+    }
     if (!rented) return;
     const s = settlementOf(c);
     if (s) rentals.confirmRent(rented.id, s);
-    else await rentals.abandonRent(rented.id, `HTTP ${c.res.status}`);
+    else await rentals.abandonRent(rented.id, settlementFailureReason(c));
   };
 
   app.post("/rent", parseRent, capacity, paidRent, async (c) => {
@@ -295,8 +318,16 @@ export function createApp(d: AppDeps) {
     } catch (e) {
       // A failed rent returns >= 400, so x402 never settles: the agent pays nothing.
       const code = e instanceof LiumError ? (e.code ?? "lium_error") : "rent_failed";
+      // The market moved under the quote (node taken, split refused, price rose): ask for a fresh quote.
+      const capacity = e instanceof LiumNoMatchError || (e instanceof LiumError && (e.status === 409 || NODE_TAKEN_CODES.has(code)));
+      pricing.release(quote.key);
       bus.emit("gateway.warning", `Lium rent failed (${code}): ${(e as Error).message}. Payment not settled.`);
-      return err(c, e instanceof LiumError && e.status === 409 ? 409 : 502, code, `Renting on Lium failed, so your payment was not settled: ${(e as Error).message}`);
+      return err(
+        c,
+        capacity ? 409 : 502,
+        capacity ? "capacity_changed" : code,
+        `${capacity ? "That GPU was taken before it could be rented; request a new quote." : "Renting on Lium failed."} Your payment was not settled. (${(e as Error).message})`,
+      );
     }
     c.set("rented", row);
     const body: GatewayRentResponse = {

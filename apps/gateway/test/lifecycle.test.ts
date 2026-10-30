@@ -125,6 +125,7 @@ describe("full agent chain over x402 and real SSH", () => {
     const rented = await toolkit.rentGpu({ gpu: "RTX 4090", minutes: 20 });
     expect(rented).toMatchObject({ gpu: "NVIDIA GeForce RTX 4090", paidUsd: 0.1925 }); // 20 min → 2 blocks
     expect(rented.paymentTx).toMatch(/^0x[0-9a-f]{64}$/);
+    expect(rented.paymentExplorer).toBe(`https://sepolia.basescan.org/tx/${rented.paymentTx}`);
     expect(rented.ssh).toBe(`ssh root@${sshd.host} -p ${sshd.port}`);
 
     const run = await toolkit.runOnGpu({ podId: rented.podId, command: "echo benchmark-ok && exit 0", timeoutSeconds: 30 });

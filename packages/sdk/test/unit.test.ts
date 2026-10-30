@@ -70,6 +70,13 @@ describe("filterGpus", () => {
     expect(filterGpus(list, { gpu: ["H100", "rtx 4090"], maxUsdPerGpuHour: 0.3 }).map((g) => g.id)).toEqual(["c", "b"]);
     expect(filterGpus(list, { gpu: "H100" }).map((g) => g.id)).toEqual(["f"]);
   });
+  it("treats a multi-GPU node with no minimum as whole-only (splitting off)", () => {
+    const whole = exec({ id: "w", price_per_gpu: 0.05, gpu_count: 8, available_gpu_count: 8, min_gpu_count_for_rental: null });
+    const split = exec({ id: "s", price_per_gpu: 0.06, gpu_count: 8, available_gpu_count: 8, min_gpu_count_for_rental: 1 });
+    expect(filterGpus([whole, split], { gpuCount: 1 }).map((g) => g.id)).toEqual(["s"]);
+    expect(filterGpus([whole, split], { gpuCount: 8 }).map((g) => g.id)).toEqual(["w", "s"]);
+    expect(filterGpus([exec({ id: "one", gpu_count: 1, min_gpu_count_for_rental: null })], { gpuCount: 1 })).toHaveLength(1);
+  });
   it("respects minimum GPU counts per node", () => {
     expect(filterGpus(list, { gpuCount: 8 }).map((g) => g.id)).toEqual(["g"]);
   });

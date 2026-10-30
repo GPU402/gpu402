@@ -6,6 +6,7 @@ export type GatewayEventType =
   | "payment.verified"
   | "payment.settled"
   | "payment.failed"
+  | "payment.rejected"
   | "payment.refunded"
   | "pod.rented"
   | "pod.ready"

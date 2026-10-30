@@ -17,5 +17,5 @@ try {
   console.log(`exit code ${out.exitCode} in ${out.durationMs} ms`);
 } finally {
   const { spentUsd } = await lium.stop(pod.podId);
-  console.log(`Stopped. Lium billed $${(spentUsd ?? 0).toFixed(4)} for this run.`);
+  console.log(`Stopped. Lium billed $${(spentUsd ?? 0).toFixed(6)} for this run (per-second ledger).`);
 }

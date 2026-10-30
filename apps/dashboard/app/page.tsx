@@ -343,6 +343,7 @@ const EVENT_COLOR: Record<string, string> = {
   "payment.settled": "text-x402",
   "payment.refunded": "text-warn",
   "payment.failed": "text-bad",
+  "payment.rejected": "text-bad",
   "pod.rented": "text-accent",
   "pod.ready": "text-accent",
   "pod.extended": "text-accent",

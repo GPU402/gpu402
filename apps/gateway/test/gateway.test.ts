@@ -116,10 +116,23 @@ describe("GPU402 gateway", () => {
     expect(h.ledger.getPod(podId)).toMatchObject({ status: "expired", removed_reason: "paid_time_ended" });
   });
 
+  it("explains a payment the facilitator refuses, and rents nothing", async () => {
+    const before = h.ledger.recentPods(100).length;
+    const broke = privateKeyToAccount(generatePrivateKey());
+    h.control.unfunded.add(broke.address.toLowerCase());
+    const brokeFetch = wrapFetchWithPaymentFromConfig(gatewayFetch, { schemes: [{ network: NETWORK, client: new ExactEvmScheme(broke) }] });
+    const res = await post(brokeFetch, "/rent", rentBody());
+    expect(res.status).toBe(402);
+    expect(h.ledger.recentPods(100).length).toBe(before);
+    expect(h.facilitatorLog).not.toContain("settle:96250");
+    expect(h.ledger.recentEvents(5).find((e) => e.type === "payment.rejected")?.message).toMatch(/insufficient_balance/);
+  });
+
   it("never settles when Lium cannot rent: the agent pays nothing", async () => {
     h.lium.rentFails = true;
     const res = await post(payingFetch, "/rent", rentBody());
     expect(res.status).toBe(409);
+    expect((await res.json()).error).toBe("capacity_changed");
     expect(h.facilitatorLog).toEqual(["verify:true:96250"]);
   });
 
@@ -129,7 +142,7 @@ describe("GPU402 gateway", () => {
     expect(res.status).toBe(402);
     const failed = h.ledger.recentPods(1)[0]!;
     expect(failed.status).toBe("failed");
-    expect(failed.removed_reason).toMatch(/^payment_failed/);
+    expect(failed.removed_reason).toMatch(/^payment_failed: insufficient_funds/); // the facilitator's own reason
     expect(h.lium.deleted).toContain(failed.id);
   });
 

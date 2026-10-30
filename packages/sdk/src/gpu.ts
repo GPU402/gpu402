@@ -22,6 +22,14 @@ export function gpuMatches(e: LiumExecutor, query: string): boolean {
   return [e.gpu_class, e.gpu_class_display, e.machine_name].some((n) => n && normalizeGpuName(n).includes(q));
 }
 
+/**
+ * Smallest number of GPUs a node rents out at once. A provider turns GPU splitting off by
+ * clearing the minimum, so a multi-GPU node with no minimum rents whole only.
+ */
+export function minRentableGpus(e: LiumExecutor): number {
+  return e.min_gpu_count_for_rental ?? Math.max(e.gpu_count ?? 1, 1);
+}
+
 export interface Gpu {
   /** Executor (node) id: pass it to `rent` or `quote`. */
   id: string;
@@ -56,7 +64,7 @@ export function toGpu(e: LiumExecutor): Gpu {
     gpu: gpuClassOf(e),
     gpuCount: e.gpu_count ?? 0,
     availableGpuCount: e.available_gpu_count ?? e.gpu_count ?? 0,
-    minGpuCount: e.min_gpu_count_for_rental ?? 1,
+    minGpuCount: minRentableGpus(e),
     pricePerGpuHour: e.price_per_gpu ?? Number.POSITIVE_INFINITY,
     vramGb: vram ?? null,
     maxCudaVersion: e.max_cuda_version ?? null,
@@ -94,7 +102,7 @@ export function filterGpus(executors: LiumExecutor[], filter: GpuFilter = {}): G
   return executors
     .filter((e) => e.price_per_gpu != null && e.active !== false && e.is_responsive !== false)
     .filter((e) => (e.available_gpu_count ?? e.gpu_count ?? 0) >= count)
-    .filter((e) => (e.min_gpu_count_for_rental ?? 1) <= count)
+    .filter((e) => minRentableGpus(e) <= count)
     .filter((e) => !reliableOnly || (!e.frequent_rent_failures && e.disk_health_ok !== false))
     .filter((e) => !filter.secureOnly || e.tier !== "spot")
     .filter((e) => wanted.length === 0 || wanted.some((w) => gpuMatches(e, w)))
