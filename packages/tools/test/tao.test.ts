@@ -41,7 +41,7 @@ describe("TAO pricing", () => {
   });
 });
 
-describe("native TAO x402 scheme on a real EVM node (chain 945)", () => {
+describe("native TAO x402 scheme on a real EVM node (chain 945)", { timeout: 30_000 }, () => {
   const amount = usdToTaoWei(0.09625, 233.29);
 
   it("advertises the native scheme for the Bittensor network", async () => {

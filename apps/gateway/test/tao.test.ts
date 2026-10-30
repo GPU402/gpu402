@@ -34,7 +34,8 @@ beforeEach(() => {
   h.rentals.invalidateBalance();
 });
 
-describe("paying in TAO on Bittensor EVM", () => {
+// Each test waits for real transactions to be mined, so it gets more than vitest's default 5 s.
+describe("paying in TAO on Bittensor EVM", { timeout: 30_000 }, () => {
   it("offers USDC and TAO in one 402, at the same USD price", async () => {
     const res = await h.gatewayFetch("http://gateway.test/rent", {
       method: "POST",

@@ -46,6 +46,12 @@ export const BITTENSOR_EVM: Record<string, { name: string; rpcUrl: string; explo
 };
 
 export const isTaoNetwork = (network: string) => network in BITTENSOR_EVM;
+
+/**
+ * Poll for receipts every second. viem's default for a chain it has no
+ * definition for is 4 s, which would add up to 4 s to every TAO settlement.
+ */
+const POLLING_MS = 1_000;
 const chainIdOf = (network: string) => Number(network.split(":")[1]);
 
 /** USD → wei of TAO at `usdPerTao`, rounded up to a whole rao so the gateway is never under-paid. */
@@ -80,7 +86,7 @@ export class NativeTaoClientScheme {
     if (!c) {
       const url = this.rpcUrls[network] ?? BITTENSOR_EVM[network]?.rpcUrl;
       if (!url) throw new Error(`No RPC URL for ${network}`);
-      c = createPublicClient({ transport: http(url) }) as PublicClient;
+      c = createPublicClient({ transport: http(url), pollingInterval: POLLING_MS }) as PublicClient;
       this.clients.set(network, c);
     }
     return c;
@@ -160,7 +166,7 @@ export class NativeTaoFacilitator implements FacilitatorClient {
     for (const [network, url] of Object.entries(opts.networks)) {
       const rpc = url ?? BITTENSOR_EVM[network]?.rpcUrl;
       if (!rpc) throw new Error(`No RPC URL for ${network}`);
-      this.clients.set(network, createPublicClient({ transport: http(rpc) }) as PublicClient);
+      this.clients.set(network, createPublicClient({ transport: http(rpc), pollingInterval: POLLING_MS }) as PublicClient);
     }
   }
 
@@ -232,7 +238,7 @@ export class NativeTaoFacilitator implements FacilitatorClient {
 
 /** Sends TAO from the gateway's own wallet, e.g. to refund an agent. */
 export async function sendTao(account: LocalAccount, network: string, to: Hex, wei: bigint, rpcUrl?: string): Promise<Hex> {
-  const c = createPublicClient({ transport: http(rpcUrl ?? BITTENSOR_EVM[network]?.rpcUrl) }) as PublicClient;
+  const c = createPublicClient({ transport: http(rpcUrl ?? BITTENSOR_EVM[network]?.rpcUrl), pollingInterval: POLLING_MS }) as PublicClient;
   const [nonce, gasPrice, gas] = await Promise.all([
     c.getTransactionCount({ address: account.address, blockTag: "pending" }),
     c.getGasPrice(),
