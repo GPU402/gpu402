@@ -24,7 +24,7 @@ import { explorerTx, isTestnet, networkLabel, type Config } from "./config.js";
 import { ACTIVE_STATUSES, type Ledger, type PodRow } from "./db.js";
 import type { EventBus } from "./events.js";
 import { rateLimit } from "./limits.js";
-import { ExtendRequest, Pricing, QuoteError, RentRequest, fromMicros, money, toMicros, type GatewayQuote } from "./pricing.js";
+import { ExtendRequest, MarketUnavailableError, Pricing, QuoteError, RentRequest, fromMicros, money, toMicros, type GatewayQuote } from "./pricing.js";
 import { CapacityError, RentalService, shortAddr, type Settlement } from "./rentals.js";
 
 type Vars = {
@@ -130,6 +130,11 @@ export function createApp(d: AppDeps) {
   app.use("/pods/*", limited);
 
   app.onError((e, c) => {
+    // Lium being down is not a gateway bug: say so, and no payment is ever requested.
+    if (e instanceof MarketUnavailableError || (e instanceof LiumError && (e.status ?? 0) >= 500)) {
+      c.header("Retry-After", "30");
+      return err(c, 503, "lium_unavailable", e.message);
+    }
     console.error(e);
     return err(c, 500, "internal_error", e.message);
   });
@@ -269,7 +274,15 @@ export function createApp(d: AppDeps) {
 
   app.get("/gpus", async (c) => {
     const models = await pricing.models();
-    return c.json({ network: cfg.X402_NETWORK, blockMinutes: BLOCK_MINUTES, margin: cfg.MARGIN, models });
+    const at = pricing.marketAt;
+    return c.json({
+      network: cfg.X402_NETWORK,
+      blockMinutes: BLOCK_MINUTES,
+      margin: cfg.MARGIN,
+      marketAt: at ? new Date(at).toISOString() : null,
+      stale: at !== null && Date.now() - at > 60_000,
+      models,
+    });
   });
 
   app.get("/quote", async (c) => {

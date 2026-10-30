@@ -153,3 +153,36 @@ describe("abuse limits", () => {
     }
   });
 });
+
+describe("Lium outage", () => {
+  it("serves the last good market while Lium is down, and says so plainly when there is none", async () => {
+    const h = await createHarness();
+    try {
+      // Nothing cached yet: a clear 503, never a 500 and never a payment request.
+      h.lium.marketDown = true;
+      const cold = await h.gatewayFetch("http://gateway.test/gpus");
+      expect(cold.status).toBe(503);
+      expect(await cold.json()).toMatchObject({ error: "lium_unavailable" });
+      const rent = await h.gatewayFetch("http://gateway.test/rent", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ gpu: "RTX 4090", sshPublicKey: ssh.publicKey }),
+      });
+      expect(rent.status).toBe(503);
+      expect(rent.headers.get("PAYMENT-REQUIRED")).toBeNull();
+
+      // Lium back: the market is cached. Then Lium down again: the cache keeps quoting.
+      h.lium.marketDown = false;
+      expect((await h.gatewayFetch("http://gateway.test/gpus")).status).toBe(200);
+      h.lium.marketDown = true;
+      // Force a refresh while Lium is down: it must fall back to the snapshot, not fail.
+      const snapshot = await h.pricing.gpus(true);
+      expect(snapshot.length).toBeGreaterThan(0);
+      const warm = await h.gatewayFetch("http://gateway.test/quote?gpu=RTX4090&gpuCount=1&blocks=3");
+      expect(warm.status).toBe(200);
+      expect((await warm.json()).blockPriceUsd).toBe(0.09625);
+    } finally {
+      await h.close();
+    }
+  }, 30_000);
+});

@@ -52,6 +52,8 @@ export async function createHarness(opts: HarnessOptions = {}) {
   const lium = {
     balance: 20,
     rentFails: false,
+    /** Make Lium's market listing answer 503, like an outage. */
+    marketDown: false,
     podStatus: "PENDING",
     rents: [] as { executor: string; body: Record<string, unknown> }[],
     deleted: [] as string[],
@@ -72,7 +74,9 @@ export async function createHarness(opts: HarnessOptions = {}) {
       if (req.headers["x-api-key"] !== "sk_test" && !(req.method === "GET" && ["/executors", "/templates"].includes(path))) {
         return send(res, 401, { error: { code: "unauthorized", message: "API key not found" } });
       }
-      if (req.method === "GET" && path === "/executors") return send(res, 200, EXECUTORS);
+      if (req.method === "GET" && path === "/executors") {
+        return lium.marketDown ? send(res, 503, { error: { code: "upstream_unavailable", message: "Service Unavailable" } }) : send(res, 200, EXECUTORS);
+      }
       if (req.method === "GET" && path === "/templates") {
         return send(res, 200, [{ id: "tpl-pytorch", name: "Pytorch (Cuda + DinD)", category: "PYTORCH", user_id: null, is_private: false, docker_image_tag: "2.11-cuda12.8", status: "CREATED" }]);
       }
@@ -207,6 +211,7 @@ export async function createHarness(opts: HarnessOptions = {}) {
   return {
     app,
     cfg,
+    pricing,
     payTo,
     ledger,
     rentals,

@@ -102,6 +102,12 @@ export class Pricing {
   }
 
   /** Rentable nodes the gateway is willing to sell, refreshed at most every 30 s. */
+  /**
+   * Rentable nodes the gateway is willing to sell, refreshed at most every 30 s.
+   * If Lium cannot be reached, the last good snapshot is served for up to 15
+   * minutes. Quoting from it is safe: a rent still goes to Lium with the quoted
+   * price as a ceiling, and nothing is settled if that rent fails.
+   */
   async gpus(force = false): Promise<Gpu[]> {
     if (!force && this.market && Date.now() - this.market.at < 30_000) return this.market.gpus;
     this.inflight ??= this.lium
@@ -111,7 +117,17 @@ export class Pricing {
         return gpus;
       })
       .finally(() => (this.inflight = undefined));
-    return this.inflight;
+    try {
+      return await this.inflight;
+    } catch (err) {
+      if (this.market && Date.now() - this.market.at < 15 * 60_000) return this.market.gpus;
+      throw new MarketUnavailableError(`Lium's market could not be read (${(err as Error).message}). Try again shortly.`);
+    }
+  }
+
+  /** When the market snapshot was taken, so clients can tell a stale one. */
+  get marketAt(): number | null {
+    return this.market?.at ?? null;
   }
 
   async models(): Promise<MarketModel[]> {
@@ -192,4 +208,9 @@ export class Pricing {
 
 export class QuoteError extends Error {
   override name = "QuoteError";
+}
+
+/** Lium's market is unreachable and no recent snapshot is cached. */
+export class MarketUnavailableError extends Error {
+  override name = "MarketUnavailableError";
 }
