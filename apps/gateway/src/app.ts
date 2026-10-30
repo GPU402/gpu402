@@ -111,7 +111,8 @@ export function createApp(d: AppDeps) {
     "*",
     cors({
       origin: cfg.CORS_ORIGIN === "*" ? "*" : cfg.CORS_ORIGIN.split(","),
-      allowHeaders: ["Content-Type", "PAYMENT-SIGNATURE", "X-PAYMENT", OWNERSHIP_HEADERS.timestamp, OWNERSHIP_HEADERS.signature],
+      // @x402/fetch adds Access-Control-Expose-Headers to its paid retry; without it browsers fail the preflight.
+      allowHeaders: ["Content-Type", "PAYMENT-SIGNATURE", "X-PAYMENT", "Access-Control-Expose-Headers", OWNERSHIP_HEADERS.timestamp, OWNERSHIP_HEADERS.signature],
       exposeHeaders: ["PAYMENT-REQUIRED", "PAYMENT-RESPONSE", "X-PAYMENT-RESPONSE"],
     }),
   );

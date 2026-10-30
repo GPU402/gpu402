@@ -208,3 +208,24 @@ describe("node locations for the dashboard globe", () => {
     }
   });
 });
+
+describe("browser payments", () => {
+  it("lets a browser x402 client through the CORS preflight on its paid retry", async () => {
+    const h = await createHarness();
+    try {
+      const res = await h.gatewayFetch("http://gateway.test/rent", {
+        method: "OPTIONS",
+        headers: {
+          origin: "http://localhost:3000",
+          "access-control-request-method": "POST",
+          // What @x402/fetch sends with the signed retry.
+          "access-control-request-headers": "content-type,payment-signature,access-control-expose-headers",
+        },
+      });
+      const allowed = (res.headers.get("access-control-allow-headers") ?? "").toLowerCase().split(",");
+      expect(allowed).toEqual(expect.arrayContaining(["content-type", "payment-signature", "access-control-expose-headers"]));
+    } finally {
+      await h.close();
+    }
+  });
+});
