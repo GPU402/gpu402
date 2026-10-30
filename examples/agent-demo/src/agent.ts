@@ -6,6 +6,7 @@
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createGpuTools, type ToolEvent } from "@gpu402/tools/ai";
+import { withQuotaFallback } from "./fallback.js";
 import { generateText, stepCountIs } from "ai";
 import type { Hex } from "viem";
 
@@ -45,8 +46,17 @@ const onEvent = (e: ToolEvent) => {
 };
 
 const { tools, toolkit } = createGpuTools({ mode: "x402", gatewayUrl, wallet, maxUsdPerPayment: 1, payWith, onEvent });
-const modelId = process.env.AGENT_MODEL || (provider === "google" ? "gemini-3.5-flash" : "claude-sonnet-5-5");
-const model = provider === "google" ? createGoogleGenerativeAI()(modelId) : createAnthropic()(modelId);
+// AGENT_MODEL may be a comma-separated list: when one model's quota runs out, the next takes over.
+const modelIds = (process.env.AGENT_MODEL || (provider === "google" ? "gemini-3.5-flash,gemini-3-flash-preview,gemini-3.5-flash-lite,gemini-flash-lite-latest" : "claude-sonnet-5-5"))
+  .split(",")
+  .map((m) => m.trim())
+  .filter(Boolean);
+const modelId = modelIds[0]!;
+const make = provider === "google" ? createGoogleGenerativeAI() : createAnthropic();
+const model = withQuotaFallback(
+  modelIds.map((id) => make(id)),
+  (from, to) => console.log(`${c.yellow}⇢ ${from} is out of quota; continuing with ${to}${c.reset}`),
+);
 
 const task =
   process.argv.slice(2).join(" ") ||
