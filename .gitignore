@@ -38,4 +38,5 @@ scratch/
 
 # demo film: raw captures and renders
 video/public/capture/
+video/public/site/
 video/out/
