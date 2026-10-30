@@ -36,7 +36,5 @@ DEMO.md
 scripts/live/
 scratch/
 
-# demo film: raw captures and renders
-video/public/capture/
-video/public/site/
-video/out/
+# demo film: kept out of the repository
+video/

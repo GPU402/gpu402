@@ -2,7 +2,6 @@ packages:
   - packages/*
   - apps/*
   - examples/*
-  - video
 allowBuilds:
   esbuild: true
   sharp: true
