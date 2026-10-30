@@ -35,3 +35,7 @@ DEMO.md
 # live verification scripts (local)
 scripts/live/
 scratch/
+
+# demo film: raw captures and renders
+video/public/capture/
+video/out/
