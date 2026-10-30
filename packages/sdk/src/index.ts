@@ -23,6 +23,7 @@ export {
   LiumServerError,
   PodStartError,
   LiumSSHError,
+  LiumHostKeyError,
   BudgetExceededError,
   errorFromResponse,
   NODE_TAKEN_CODES,
@@ -32,6 +33,8 @@ export type { Gpu, GpuFilter, LiumExecutor } from "./gpu.js";
 export { parseSshCommand, toPod, TERMINAL_POD_STATUSES } from "./pod.js";
 export type { Pod, SshTarget } from "./pod.js";
 export { sshExec, generateSshKeyPair, waitForPort } from "./ssh.js";
+export { DefaultHostKeyStore, FileHostKeyStore, MemoryHostKeyStore, defaultHostKeyStore } from "./hostkeys.js";
+export type { HostKeyStore } from "./hostkeys.js";
 export type { ExecOptions, ExecResult, SshKeyPair } from "./ssh.js";
 export { createRetryingFetch } from "./http.js";
 export type { RetryOptions } from "./http.js";

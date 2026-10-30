@@ -1,6 +1,7 @@
 import { connect } from "node:net";
 import ssh2, { type Client as SshClient, type ConnectConfig } from "ssh2";
-import { LiumSSHError } from "./errors.js";
+import { LiumHostKeyError, LiumSSHError } from "./errors.js";
+import { defaultHostKeyStore, hostKeyString, insecureByEnv, type HostKeyStore } from "./hostkeys.js";
 import { sleep } from "./http.js";
 import type { SshTarget } from "./pod.js";
 
@@ -22,6 +23,14 @@ export interface ExecOptions {
   /** Cap on captured output per stream, in bytes. Default 4 MiB. */
   maxOutputBytes?: number;
   signal?: AbortSignal;
+  /**
+   * Host key checking. By default the pod's key is pinned on first connection
+   * (in ~/.lium/known_hosts/<id>, shared with Lium's CLI) and any later
+   * different key is refused with LiumHostKeyError. `id` names the pin (the pod
+   * id; defaults to host:port). `false` turns checking off, as does
+   * LIUM_SSH_INSECURE=1.
+   */
+  hostKey?: { id?: string; store?: HostKeyStore } | false;
 }
 
 export interface ExecResult {
@@ -34,25 +43,44 @@ export interface ExecResult {
   truncated: boolean;
 }
 
-function sshConfig(target: SshTarget, opts: ExecOptions): ConnectConfig {
-  return {
-    host: target.host,
-    port: target.port,
-    username: target.user,
-    privateKey: opts.privateKey,
-    passphrase: opts.passphrase,
-    readyTimeout: 20_000,
-    keepaliveInterval: 15_000,
-    // Pods are ephemeral and their host keys are new on every rent.
-    hostVerifier: () => true,
-  };
-}
+async function connectOnce(target: SshTarget, opts: ExecOptions): Promise<SshClient> {
+  const check = opts.hostKey !== false && !insecureByEnv();
+  const store = (opts.hostKey && opts.hostKey.store) || defaultHostKeyStore;
+  const id = (opts.hostKey && opts.hostKey.id) || `${target.host}:${target.port}`;
+  const pinned = check ? await store.get(id) : [];
+  let seen: string | undefined;
 
-function connectOnce(target: SshTarget, opts: ExecOptions): Promise<SshClient> {
-  return new Promise((resolve, reject) => {
-    const client = new Client();
-    client.once("ready", () => resolve(client)).once("error", reject).connect(sshConfig(target, opts));
+  const client = await new Promise<SshClient>((resolve, reject) => {
+    const c = new Client();
+    c.once("ready", () => resolve(c))
+      .once("error", (err) => {
+        if (seen && pinned.length && !pinned.includes(seen)) {
+          reject(
+            new LiumHostKeyError(`Pod ${id} presented an SSH host key that differs from the one pinned for it; refusing to connect.`, {
+              code: "host_key_mismatch",
+              hint: `If the pod was recreated, remove its pin (${id} in ~/.lium/known_hosts) and connect again. Otherwise someone may be intercepting the connection.`,
+            }),
+          );
+        } else reject(err);
+      })
+      .connect({
+        host: target.host,
+        port: target.port,
+        username: target.user,
+        privateKey: opts.privateKey,
+        passphrase: opts.passphrase,
+        readyTimeout: 20_000,
+        keepaliveInterval: 15_000,
+        // Checked during the handshake, before authentication: a wrong key never sees a command.
+        hostVerifier: (key: Buffer) => {
+          seen = hostKeyString(key);
+          return !check || pinned.length === 0 || pinned.includes(seen);
+        },
+      } satisfies ConnectConfig);
   });
+
+  if (check && pinned.length === 0 && seen) await store.add(id, { host: target.host, port: target.port, key: seen });
+  return client;
 }
 
 /** Resolves when the TCP port accepts connections (sshd is listening). */
@@ -79,6 +107,7 @@ export async function sshExec(target: SshTarget, command: string, opts: ExecOpti
     try {
       client = await connectOnce(target, opts);
     } catch (err) {
+      if (err instanceof LiumHostKeyError) throw err; // never retry against a host we do not trust
       lastErr = err;
       const msg = String((err as Error)?.message ?? err);
       if (/authentication/i.test(msg)) break;

@@ -1,6 +1,6 @@
 {
   "name": "gpu402",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Typed TypeScript SDK for Lium (Bittensor Subnet 51): rent the cheapest matching GPU, wait until ready, run a job over SSH, stop it, enforce a budget.",
   "license": "MIT",
   "type": "module",

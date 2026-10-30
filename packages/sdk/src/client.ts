@@ -437,7 +437,8 @@ export class Lium {
   async exec(pod: Pod | string, command: string, opts: ExecOptions): Promise<ExecResult> {
     const p = typeof pod === "string" ? await this.getPod(pod) : pod;
     if (!p.ssh) throw new LiumError(`Pod ${p.id} has no SSH endpoint yet (status ${p.status}); call waitReady first.`, { code: "pod_not_ready" });
-    return sshExec(p.ssh, command, opts);
+    // Pin the host key under the pod id, as Lium's own tools do.
+    return sshExec(p.ssh, command, { ...opts, hostKey: opts.hostKey === false ? false : { id: p.id, ...opts.hostKey } });
   }
 
   /** Removes the pod. Idempotent: an already removed pod is not an error. Returns the final ledger spend when known. */

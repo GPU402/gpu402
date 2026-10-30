@@ -177,6 +177,7 @@ export class GpuToolkit {
     if (!pod) throw new Error(`Unknown or not ready pod ${input.podId}; call rentGpu first.`);
     const r = await sshExec(pod.ssh, input.command, {
       privateKey: this.sshKey.privateKey,
+      hostKey: { id: pod.podId }, // pinned on first use; a changed key is refused
       timeoutMs: input.timeoutSeconds * 1000,
       onStdout: (chunk) => this.emit({ type: "stdout", podId: pod.podId, chunk }),
       onStderr: (chunk) => this.emit({ type: "stderr", podId: pod.podId, chunk }),

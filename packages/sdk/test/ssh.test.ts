@@ -1,7 +1,22 @@
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer, type ServerResponse } from "node:http";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { AddressInfo } from "node:net";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { Lium, LiumSSHError, PodStartError, generateSshKeyPair, sshExec, waitForPort, type SshTarget } from "../src/index.js";
+import {
+  DefaultHostKeyStore,
+  FileHostKeyStore,
+  Lium,
+  LiumHostKeyError,
+  LiumSSHError,
+  MemoryHostKeyStore,
+  PodStartError,
+  generateSshKeyPair,
+  sshExec,
+  waitForPort,
+  type SshTarget,
+} from "../src/index.js";
 import { startSshServer, type TestSshServer } from "./ssh-server.js";
 
 const key = generateSshKeyPair("test");
@@ -116,5 +131,66 @@ describe("Lium pod lifecycle against a Lium-format server and a real SSH server"
     stop();
     expect(deleted).toContain("pod-3");
     expect(capped).toBeCloseTo(0.12);
+  });
+});
+
+describe("SSH host key pinning (as Lium's CLI does)", () => {
+  const dir = () => mkdtempSync(join(tmpdir(), "pins-"));
+
+  it("pins the key on first connection, in OpenSSH known_hosts format, and accepts it again", async () => {
+    const store = new FileHostKeyStore(dir());
+    expect(await store.get("pod-a")).toEqual([]);
+    await sshExec(target, "true", { privateKey: key.privateKey, hostKey: { id: "pod-a", store } });
+    const file = readFileSync(join(store.dir, "pod-a"), "utf8");
+    expect(file).toMatch(new RegExp(`^\\[127\\.0\\.0\\.1\\]:${ssh.port} ssh-ed25519 AAAA\\S+\\n$`));
+    const again = await sshExec(target, "echo ok", { privateKey: key.privateKey, hostKey: { id: "pod-a", store } });
+    expect(again.stdout).toBe("ok\n");
+  });
+
+  it("refuses a pod whose host key changed, before running anything, without retrying", async () => {
+    const store = new FileHostKeyStore(dir());
+    await sshExec(target, "true", { privateKey: key.privateKey, hostKey: { id: "pod-b", store } });
+    const impostor = await startSshServer(key.publicKey); // same client key accepted, different host key
+    try {
+      const started = Date.now();
+      const to = { ...target, port: impostor.port };
+      await expect(sshExec(to, "echo pwned", { privateKey: key.privateKey, hostKey: { id: "pod-b", store } })).rejects.toBeInstanceOf(LiumHostKeyError);
+      expect(impostor.commands).toEqual([]);
+      expect(Date.now() - started).toBeLessThan(3_000);
+      // Explicitly opting out connects, as LIUM_SSH_INSECURE=1 does in Lium's tools.
+      expect((await sshExec(to, "echo ok", { privateKey: key.privateKey, hostKey: false })).stdout).toBe("ok\n");
+      process.env.LIUM_SSH_INSECURE = "1";
+      expect((await sshExec(to, "echo ok", { privateKey: key.privateKey, hostKey: { id: "pod-b", store } })).stdout).toBe("ok\n");
+    } finally {
+      delete process.env.LIUM_SSH_INSECURE;
+      await impostor.close();
+    }
+  });
+
+  it("reads pins written by Lium's CLI (plain host, comments)", async () => {
+    const store = new FileHostKeyStore(dir());
+    const real = await new Promise<string>((resolve) => {
+      // Learn the server's real key through a first pin in another store.
+      const s2 = new MemoryHostKeyStore();
+      void sshExec(target, "true", { privateKey: key.privateKey, hostKey: { id: "x", store: s2 } }).then(async () => resolve((await s2.get("x"))[0]!));
+    });
+    mkdirSync(store.dir, { recursive: true });
+    writeFileSync(join(store.dir, "pod-c"), `# pinned by lium\n203.0.113.9 ${real}\n`);
+    expect((await sshExec(target, "echo ok", { privateKey: key.privateKey, hostKey: { id: "pod-c", store } })).stdout).toBe("ok\n");
+  });
+
+  it("falls back to an in-memory pin where the filesystem cannot be written", async () => {
+    const blocker = join(dir(), "not-a-dir");
+    writeFileSync(blocker, "");
+    process.env.GPU402_KNOWN_HOSTS_DIR = blocker;
+    const store = new DefaultHostKeyStore();
+    await sshExec(target, "true", { privateKey: key.privateKey, hostKey: { id: "pod-d", store } });
+    expect((await store.get("pod-d")).length).toBe(1);
+    const impostor = await startSshServer(key.publicKey);
+    try {
+      await expect(sshExec({ ...target, port: impostor.port }, "true", { privateKey: key.privateKey, hostKey: { id: "pod-d", store } })).rejects.toBeInstanceOf(LiumHostKeyError);
+    } finally {
+      await impostor.close();
+    }
   });
 });

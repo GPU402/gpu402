@@ -31,6 +31,7 @@ await lium.stop(pod.podId);
 
 - **Typed errors** follow Lium's `error.code` envelope: `LiumInsufficientBalanceError`, `LiumNoMatchError` (with `.constraint`), `LiumRateLimitError`, `PodStartError` and others.
 - **Retries** use exponential backoff with jitter on 429 and 5xx, and honour `Retry-After`. A POST is retried only when it carries an `Idempotency-Key`.
+- **Host keys are checked:** the first SSH connection to a pod pins its host key in `~/.lium/known_hosts/<pod id>`, shared with Lium's CLI, and a different key later is refused with `LiumHostKeyError` before anything runs. Set `LIUM_SSH_INSECURE=1` (or `hostKey: false`) to opt out.
 - **Never leak cost:** with `ttlMinutes`, Lium schedules the pod's removal server-side. If that schedule cannot be set, the pod is removed at once.
 - **Types** are regenerated from `https://lium.io/api/openapi.json` with `pnpm gen:types`, so the SDK tracks Lium's API exactly.
 

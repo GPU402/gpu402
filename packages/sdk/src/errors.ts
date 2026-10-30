@@ -86,6 +86,10 @@ export class PodStartError extends LiumError {
 export class LiumSSHError extends LiumError {
   override name = "LiumSSHError";
 }
+/** A pod presented an SSH host key that differs from the one pinned for it. Nothing was run. */
+export class LiumHostKeyError extends LiumSSHError {
+  override name = "LiumHostKeyError";
+}
 /** The local budget guard refused a rent, or stopped pods at the cap. */
 export class BudgetExceededError extends LiumError {
   override name = "BudgetExceededError";

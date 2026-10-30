@@ -1,6 +1,6 @@
 {
   "name": "@gpu402/tools",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Drop-in GPU tools for AI agents (Vercel AI SDK and LangChain.js): rentGpu, runOnGpu, stopGpu. Key mode uses your Lium key; x402 mode pays per use in USDC with no account.",
   "license": "MIT",
   "type": "module",

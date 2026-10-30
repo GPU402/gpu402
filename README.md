@@ -256,6 +256,8 @@ Going from testnet to mainnet is a configuration change: switch the network, the
 
 The SDK reads your API key from the constructor or from `LIUM_API_KEY`, and from nowhere else. It sends the key only to the Lium API, as the `X-API-Key` header, and never logs it. There is no telemetry: the SDK makes no requests you didn't ask for, and its only runtime dependencies are `openapi-fetch` and `ssh2`.
 
+SSH connections check the pod's host key. The first connection to a pod pins its key in `~/.lium/known_hosts/<pod id>`, the same file Lium's own CLI and Python SDK use, and a later connection that presents a different key is refused with `LiumHostKeyError` before any command runs. `LIUM_SSH_INSECURE=1` turns the check off, as it does in Lium's tools.
+
 The gateway rate-limits its paid and signed routes per client, caps request bodies at 16 KiB, and sends standard security headers. It never sees an agent's private key.
 
 To report a vulnerability, open a private security advisory on this repository.
