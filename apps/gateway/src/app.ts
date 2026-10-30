@@ -25,7 +25,7 @@ import { ACTIVE_STATUSES, type Ledger, type PodRow } from "./db.js";
 import type { EventBus } from "./events.js";
 import { rateLimit } from "./limits.js";
 import { ExtendRequest, MarketUnavailableError, Pricing, QuoteError, RentRequest, fromMicros, money, toMicros, type GatewayQuote } from "./pricing.js";
-import { CapacityError, RentalService, shortAddr, type Settlement } from "./rentals.js";
+import { CapacityError, RentalService, locationOf, shortAddr, type Settlement } from "./rentals.js";
 
 type Vars = {
   rentReq: RentRequest;
@@ -454,9 +454,22 @@ export function createApp(d: AppDeps) {
 
   // --------------------------------------------------------- dashboard feed
   app.get("/api/state", async (c) => {
+    // Older rentals may predate stored coordinates: fill them from Lium's live node list when the node is still listed.
+    const known = new Map((await pricing.gpus().catch(() => [])).map((g) => [g.id, locationOf(g)]));
     const pods = ledger.recentPods(40).map((p) => {
       const s = rentals.status(p, baseUrl(c));
-      return { ...s, ssh: s.ssh ? { ...s.ssh, command: undefined } : null, executorId: p.executor_id, country: p.country, liumPricePerHour: p.lium_price_per_hour, liumSpendUsd: p.lium_spend_usd };
+      const at = p.lat !== null && p.lon !== null ? { lat: p.lat, lon: p.lon } : (known.get(p.executor_id) ?? null);
+      return {
+        ...s,
+        ssh: s.ssh ? { ...s.ssh, command: undefined } : null,
+        executorId: p.executor_id,
+        country: p.country,
+        city: p.city,
+        lat: at?.lat ?? null,
+        lon: at?.lon ?? null,
+        liumPricePerHour: p.lium_price_per_hour,
+        liumSpendUsd: p.lium_spend_usd,
+      };
     });
     return c.json({
       gateway: {
@@ -488,6 +501,15 @@ export function createApp(d: AppDeps) {
   });
 
   app.get("/api/lium", async (c) => c.json((await d.liumStats()) ?? {}));
+
+  /** Every rentable node with its real location, for the dashboard globe. */
+  app.get("/api/nodes", async (c) => {
+    const nodes = (await pricing.gpus()).flatMap((g) => {
+      const at = locationOf(g);
+      return at ? [{ id: g.id, gpu: g.gpu, gpus: g.availableGpuCount, pricePerGpuHour: g.pricePerGpuHour, country: g.country, city: g.city, ...at }] : [];
+    });
+    return c.json({ nodes, at: pricing.marketAt ? new Date(pricing.marketAt).toISOString() : null });
+  });
 
   app.get("/api/events", (c) =>
     streamSSE(c, async (stream) => {

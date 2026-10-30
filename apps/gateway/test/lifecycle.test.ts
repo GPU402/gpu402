@@ -186,3 +186,25 @@ describe("Lium outage", () => {
     }
   }, 30_000);
 });
+
+describe("node locations for the dashboard globe", () => {
+  it("serves real node coordinates and records them on each rental", async () => {
+    const h = await createHarness();
+    try {
+      const { nodes } = await (await h.gatewayFetch("http://gateway.test/api/nodes")).json();
+      expect(nodes[0]).toMatchObject({ id: expect.any(String), lat: expect.any(Number), lon: expect.any(Number) });
+      const pay = wrapFetchWithPaymentFromConfig(h.gatewayFetch, { schemes: [{ network: NETWORK, client: new ExactEvmScheme(agent) }] });
+      const res = await pay("http://gateway.test/rent", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ gpu: "RTX 4090", sshPublicKey: ssh.publicKey }),
+      });
+      const { podId } = await res.json();
+      expect(h.ledger.getPod(podId)).toMatchObject({ lat: 52.52, lon: 13.405, city: "Berlin" });
+      const state = await (await h.gatewayFetch("http://gateway.test/api/state")).json();
+      expect(state.pods.find((p: { podId: string }) => p.podId === podId)).toMatchObject({ lat: 52.52, lon: 13.405, city: "Berlin" });
+    } finally {
+      await h.close();
+    }
+  });
+});

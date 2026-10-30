@@ -26,8 +26,37 @@ export interface PodView {
   removedReason: string | null;
   executorId: string;
   country: string | null;
+  city: string | null;
+  lat: number | null;
+  lon: number | null;
   liumPricePerHour: number;
   liumSpendUsd: number | null;
+  payments: PodPayment[];
+}
+
+/** A payment as the gateway reports it on a pod: `amount` is already human-readable. */
+export interface PodPayment {
+  kind: "rent" | "extend";
+  blocks: number;
+  amountUsd: number;
+  asset: string;
+  amount: string;
+  network: string;
+  txHash: string;
+  explorerUrl: string | null;
+  status: "settled" | "refunded";
+  refundTx: string | null;
+}
+
+export interface EngineNodeView {
+  id: string;
+  gpu: string;
+  gpus: number;
+  pricePerGpuHour: number;
+  country: string | null;
+  city: string | null;
+  lat: number;
+  lon: number;
 }
 
 export interface PaymentView {

@@ -1,93 +1,157 @@
 @import "tailwindcss";
 
+/* Tokens from brand.md. Dark only, with one paper surface for the headline number. */
 :root {
-  --bg: #07090d;
-  --panel: #0d1117;
-  --panel-2: #121821;
-  --line: #1c2430;
-  --line-2: #263142;
-  --text: #e6edf3;
-  --muted: #8b98a9;
-  --faint: #5b6778;
-  --accent: #39d98a;
-  --accent-dim: #1d6b47;
-  --x402: #5aa9ff;
-  --warn: #ffb547;
-  --bad: #ff6b6b;
-  --tao: #b892ff;
+  --void: #07080a;
+  --ink-1: rgba(235, 238, 245, 0.03);
+  --ink-2: rgba(235, 238, 245, 0.055);
+  --ink-3: rgba(235, 238, 245, 0.1);
+  --hair: rgba(235, 238, 245, 0.075);
+  --text: #ededf0;
+  --muted: #a3a4ab;
+  --faint: #7a7c85;
+  --accent: #4360ff;
+  --peri: #9db0ff;
+  --live: #3ddc97;
+  --usdc: #7b93ff;
+  --tao: #e8834a;
+  --amber: #e0a23a;
+  --rose: #f0616d;
+  --paper: #f2efe9;
+  --paper-ink: #16161a;
+  --paper-muted: #5d5b57;
+  --paper-hair: rgba(22, 22, 26, 0.1);
+  --rust: #b85a2e;
+  --cobalt: #3b50dd;
+  color-scheme: dark;
 }
 
 @theme inline {
-  --color-bg: var(--bg);
-  --color-panel: var(--panel);
-  --color-panel-2: var(--panel-2);
-  --color-line: var(--line);
-  --color-line-2: var(--line-2);
+  --color-void: var(--void);
+  --color-ink-1: var(--ink-1);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-hair: var(--hair);
   --color-text: var(--text);
   --color-muted: var(--muted);
   --color-faint: var(--faint);
   --color-accent: var(--accent);
-  --color-accent-dim: var(--accent-dim);
-  --color-x402: var(--x402);
-  --color-warn: var(--warn);
-  --color-bad: var(--bad);
+  --color-peri: var(--peri);
+  --color-live: var(--live);
+  --color-usdc: var(--usdc);
   --color-tao: var(--tao);
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-mono-face), ui-monospace, SFMono-Regular, Menlo, monospace;
+  --color-amber: var(--amber);
+  --color-rose: var(--rose);
+  --color-paper: var(--paper);
+  --color-paper-ink: var(--paper-ink);
+  --color-paper-muted: var(--paper-muted);
+  --color-paper-hair: var(--paper-hair);
+  --color-rust: var(--rust);
+  --color-cobalt: var(--cobalt);
+  --font-sans: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --font-display: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-instrument), Georgia, serif;
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
 }
 
 html,
 body {
-  background: var(--bg);
+  background: var(--void);
   color: var(--text);
 }
-
+html {
+  scroll-behavior: smooth;
+}
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
 body {
-  font-feature-settings: "ss01", "cv11";
   -webkit-font-smoothing: antialiased;
+  font-size: 15px;
+}
+::selection {
+  background: color-mix(in srgb, var(--accent) 45%, transparent);
 }
 
-.tabular {
+.num {
+  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
 }
 
-.grid-bg {
-  background-image:
-    linear-gradient(to right, rgb(255 255 255 / 0.025) 1px, transparent 1px),
-    linear-gradient(to bottom, rgb(255 255 255 / 0.025) 1px, transparent 1px);
-  background-size: 32px 32px;
+/* Uppercase mono label: "01 —— HOW IT WORKS". */
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--faint);
 }
 
-@keyframes pulse-dot {
-  0%,
-  100% {
-    opacity: 1;
+/* Flat panel with a hairline border. */
+.glass {
+  background: var(--ink-1);
+  border: 1px solid var(--hair);
+}
+
+/* The primary button: accent fill with a soft glow under it. */
+.btn-accent {
+  background: var(--accent);
+  color: #fff;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    0 10px 30px -10px color-mix(in srgb, var(--accent) 90%, transparent);
+}
+.btn-accent:hover {
+  background: color-mix(in srgb, var(--accent) 88%, white);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .live-dot {
+    animation: breathe 2.4s ease-in-out infinite;
   }
+  .caret {
+    animation: blink 1s steps(1) infinite;
+  }
+}
+@keyframes breathe {
   50% {
     opacity: 0.35;
+    transform: scale(0.85);
   }
 }
-.pulse-dot {
-  animation: pulse-dot 1.6s ease-in-out infinite;
-}
-
-@keyframes slide-in {
-  from {
+@keyframes blink {
+  50% {
     opacity: 0;
-    transform: translateY(-4px);
   }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-.slide-in {
-  animation: slide-in 0.35s ease-out;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .pulse-dot,
-  .slide-in {
-    animation: none;
-  }
+/* Tooltip shown over a hovered GPU node on the globe. */
+.engine-tip {
+  display: grid;
+  gap: 2px;
+  white-space: nowrap;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: rgba(10, 11, 14, 0.94);
+  border: 1px solid var(--hair);
+  font: 400 12px/1.4 var(--font-geist), sans-serif;
+  color: var(--muted);
+  transform: translateY(-34px);
+}
+.engine-tip b {
+  color: var(--text);
+  font-weight: 500;
+}
+
+/* Native dialog used for rental details. */
+dialog {
+  background: #0c0d10;
+}
+dialog::backdrop {
+  background: rgba(2, 2, 4, 0.72);
+  backdrop-filter: blur(6px);
 }

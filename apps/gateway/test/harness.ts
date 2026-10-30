@@ -22,7 +22,7 @@ export const NETWORK = "eip155:84532";
 export const USDC = "0x036CbD53842c5426634e7929541eC2318f3dCF7e";
 
 export const EXECUTORS = [
-  { id: "aaaaaaaa-0000-0000-0000-000000000001", price_per_gpu: 0.35, gpu_class: "NVIDIA GeForce RTX 4090", machine_name: "NVIDIA GeForce RTX 4090", location: { country: "Germany" } },
+  { id: "aaaaaaaa-0000-0000-0000-000000000001", price_per_gpu: 0.35, gpu_class: "NVIDIA GeForce RTX 4090", machine_name: "NVIDIA GeForce RTX 4090", location: { country: "Germany", city: "Berlin", lat: 52.52, lon: 13.405 } },
   { id: "aaaaaaaa-0000-0000-0000-000000000002", price_per_gpu: 0.4, gpu_class: "NVIDIA GeForce RTX 4090", machine_name: "NVIDIA GeForce RTX 4090", location: { country: "Poland" } },
   { id: "aaaaaaaa-0000-0000-0000-000000000003", price_per_gpu: 2.2, gpu_class: "NVIDIA H100 80GB HBM3", machine_name: "NVIDIA H100 80GB HBM3" },
 ].map((e) => ({

@@ -32,6 +32,12 @@ export interface Settlement {
 export const paidLabel = (s: Pick<Settlement, "asset" | "amountAtomic" | "amountUsd">) =>
   s.asset === TAO_ASSET ? `${formatTao(s.amountAtomic, 9)} TAO (≈$${s.amountUsd.toFixed(4)})` : `${(Number(s.amountAtomic) / 1e6).toFixed(6)} USDC`;
 
+/** Real coordinates of a Lium node, from its location record. */
+export const locationOf = (g: { raw: { location?: unknown } } | undefined) => {
+  const l = g?.raw.location as { lat?: number | null; lon?: number | null } | null | undefined;
+  return l && typeof l.lat === "number" && typeof l.lon === "number" ? { lat: l.lat, lon: l.lon } : null;
+};
+
 export const shortAddr = (a: string | null | undefined) => (a ? `${a.slice(0, 6)}…${a.slice(-4)}` : "unknown");
 const sshFingerprint = (key: string) =>
   "SHA256:" + createHash("sha256").update(Buffer.from(key.split(/\s+/)[1] ?? key, "base64")).digest("base64").replace(/=+$/, "");
@@ -134,6 +140,9 @@ export class RentalService {
       ssh_user: null,
       ssh_key_fingerprint: sshFingerprint(req.sshPublicKey),
       country: gpu?.country ?? null,
+      lat: locationOf(gpu)?.lat ?? null,
+      lon: locationOf(gpu)?.lon ?? null,
+      city: gpu?.city ?? null,
       created_at: Date.now(),
       ready_at: null,
       expires_at: null,

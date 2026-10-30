@@ -33,6 +33,10 @@ export interface PodRow {
   removed_at: number | null;
   removed_reason: string | null;
   lium_spend_usd: number | null;
+  /** Where the node is, from Lium's node data (for the dashboard globe). */
+  lat: number | null;
+  lon: number | null;
+  city: string | null;
 }
 
 export interface PaymentRow {
@@ -121,15 +125,20 @@ export class Ledger {
     this.db = new DatabaseSync(path);
     this.db.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;");
     this.db.exec(SCHEMA);
+    // Ledgers created before node locations were recorded gain the columns in place.
+    const cols = new Set((this.db.prepare("PRAGMA table_info(pods)").all() as { name: string }[]).map((c) => c.name));
+    for (const [name, type] of [["lat", "REAL"], ["lon", "REAL"], ["city", "TEXT"]] as const) {
+      if (!cols.has(name)) this.db.exec(`ALTER TABLE pods ADD COLUMN ${name} ${type}`);
+    }
   }
 
   insertPod(p: Omit<PodRow, "lium_status" | "ssh_host" | "ssh_port" | "ssh_user" | "ready_at" | "expires_at" | "removed_at" | "removed_reason" | "lium_spend_usd">) {
     this.db
       .prepare(
-        `INSERT INTO pods (id, name, payer, gpu, gpu_count, executor_id, lium_price_per_hour, block_price_usd, blocks_paid, status, ssh_key_fingerprint, country, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO pods (id, name, payer, gpu, gpu_count, executor_id, lium_price_per_hour, block_price_usd, blocks_paid, status, ssh_key_fingerprint, country, created_at, lat, lon, city)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .run(p.id, p.name, p.payer, p.gpu, p.gpu_count, p.executor_id, p.lium_price_per_hour, p.block_price_usd, p.blocks_paid, p.status, p.ssh_key_fingerprint, p.country, p.created_at);
+      .run(p.id, p.name, p.payer, p.gpu, p.gpu_count, p.executor_id, p.lium_price_per_hour, p.block_price_usd, p.blocks_paid, p.status, p.ssh_key_fingerprint, p.country, p.created_at, p.lat, p.lon, p.city);
   }
 
   updatePod(id: string, fields: Partial<PodRow>) {
