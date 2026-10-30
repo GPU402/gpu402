@@ -9,7 +9,7 @@ import type { EnginePod, EnginePulse } from "./engine/Engine";
 import { GATEWAY, getJson, gpuName, networkName, type EngineNodeView, type GatewayEvent, type GatewayState, type LiumNetwork, type MarketModel, type PodView, type Sn51Stats } from "./lib";
 import { Playground } from "./try/playground";
 import { ApiExplorer } from "./ui/api";
-import { eventMeta, railOf, toneColor } from "./ui/events";
+import { eventMeta, gpuShort, place, railOf, toneColor } from "./ui/events";
 import { InstallChip, Marquee, Reveal, Scramble, SectionHead } from "./ui/kit";
 import { NowCard } from "./ui/now";
 import { Packages } from "./ui/packages";
@@ -194,7 +194,8 @@ export default function Dashboard() {
           </motion.div>
         </div>
 
-        <div className="relative z-10 mx-auto w-full max-w-[1280px] px-4 pt-28 sm:px-6 sm:pt-36 lg:pt-[max(7rem,15vh)]">
+        {/* The copy sits above the globe but lets the pointer through, so the globe stays draggable; only its controls take clicks. */}
+        <div className="pointer-events-none relative z-10 mx-auto flex w-full max-w-[1280px] flex-1 flex-col justify-center px-4 pb-6 pt-28 sm:px-6 sm:pt-32 lg:pt-24">
           <div className="max-w-[min(760px,58vw)] max-lg:max-w-[640px]">
             <motion.p
               initial={{ opacity: 0, y: 10 }}
@@ -225,12 +226,45 @@ export default function Dashboard() {
               <p className="mt-[min(1.75rem,3.2vh)] max-w-[30rem] text-[17px] leading-relaxed text-muted lg:text-[18px]">
                 One HTTP request rents a Bittensor Subnet 51 GPU from Lium. The agent pays with x402, in USDC or TAO. No account, no API key, no human.
               </p>
-              <div className="mt-[min(2.25rem,4vh)] flex flex-wrap items-center gap-3">
+              <div className="pointer-events-auto mt-[min(2.25rem,4vh)] flex flex-wrap items-center gap-3">
                 <a href="#try" className="btn-accent inline-flex min-h-12 items-center gap-2 rounded-full px-6 text-[15px] font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-peri">
                   Rent one from here <ArrowRight className="size-4" aria-hidden />
                 </a>
                 <InstallChip cmd="npm i @gpu402/tools" />
               </div>
+
+              <dl className="mt-[min(3.5rem,7vh)] hidden max-w-xl grid-cols-2 gap-8 border-t border-hair pt-[min(1.5rem,3vh)] sm:grid">
+                <div>
+                  <dt className="eyebrow text-[10px]">Pays in</dt>
+                  <dd className="mt-2.5 flex flex-wrap gap-2 text-[13px]">
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-usdc/25 px-3 py-1 text-usdc">
+                      <span className="size-1.5 rounded-full bg-usdc" aria-hidden /> USDC · Base
+                    </span>
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-tao/25 px-3 py-1 text-tao">
+                      <span className="size-1.5 rounded-full bg-tao" aria-hidden /> TAO · Bittensor
+                    </span>
+                  </dd>
+                </div>
+                <div>
+                  <dt className="eyebrow text-[10px]">{current?.status === "running" || current?.status === "starting" ? "Renting now" : "Last rental"}</dt>
+                  <dd className="mt-2.5">
+                    {current ? (
+                      <button
+                        type="button"
+                        onClick={() => setOpen(current.podId)}
+                        className="pointer-events-auto inline-flex min-h-8 items-center gap-2 rounded-lg text-left text-[14px] text-muted transition-colors duration-100 hover:text-text focus-visible:outline-2 focus-visible:outline-peri"
+                      >
+                        <span className={cx("size-1.5 shrink-0 rounded-full", current.status === "running" ? "live-dot bg-live" : "bg-faint")} aria-hidden />
+                        <span>
+                          <span className="text-text">{gpuShort(current.gpu)}</span> in {place(current)} · {ago(Date.parse(current.createdAt), now)}
+                        </span>
+                      </button>
+                    ) : (
+                      <span className="text-[14px] text-faint">{s ? "Waiting for the first agent" : "…"}</span>
+                    )}
+                  </dd>
+                </div>
+              </dl>
             </motion.div>
           </div>
         </div>
@@ -238,7 +272,7 @@ export default function Dashboard() {
         {/* Real events, as they happen, floating over the globe. */}
         <EventToasts events={events} now={now} reduce={reduce} />
 
-        <div className="relative z-10 mx-auto mt-auto flex w-full max-w-[1280px] flex-wrap items-end justify-between gap-4 px-4 pb-6 pt-10 sm:px-6">
+        <div className="pointer-events-none relative z-10 mx-auto flex w-full max-w-[1280px] flex-wrap items-end justify-between gap-4 px-4 pb-6 sm:px-6">
           <p className="flex items-center gap-2 text-[13px] text-muted">
             <span className="size-1.5 rounded-full bg-white" aria-hidden />
             <span className="size-1.5 rounded-full bg-accent" aria-hidden />
