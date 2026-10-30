@@ -87,3 +87,14 @@ export function useNow(ms = 1000) {
   }, [ms]);
   return now;
 }
+
+/**
+ * The visitor's reduced-motion setting, read only after mount. The server cannot know it,
+ * so the first client render must match the server's (motion on) to avoid a hydration mismatch.
+ */
+export function useCalmMotion() {
+  const reduce = useReducedMotion();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  return mounted && Boolean(reduce);
+}

@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowRight, ArrowUpRight, RefreshCw } from "lucide-react";
-import { AnimatePresence, motion, useInView, useReducedMotion, useScroll, useTransform } from "motion/react";
+import { AnimatePresence, motion, useInView, useScroll, useTransform } from "motion/react";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { COLOR } from "./engine/colors";
@@ -14,7 +14,7 @@ import { InstallChip, Marquee, Reveal, Scramble, SectionHead } from "./ui/kit";
 import { NowCard } from "./ui/now";
 import { Packages } from "./ui/packages";
 import { ActivityPanel, MarketPanel, PaymentsPanel, RentalDialog, RentalsPanel, SubnetPanel, TABS, TabBar, type Tab } from "./ui/panels";
-import { CountUp, Skeleton, ago, cx, useNow } from "./ui/primitives";
+import { CountUp, Skeleton, ago, cx, useCalmMotion, useNow } from "./ui/primitives";
 import { HowItWorks } from "./ui/terminal";
 
 const REPO = "https://github.com/GPU402/gpu402";
@@ -59,7 +59,7 @@ export default function Dashboard() {
   const lium = usePoll<LiumNetwork>("/api/lium", 60_000);
   const nodes = usePoll<{ nodes: EngineNodeView[] }>("/api/nodes", 60_000);
   const now = useNow();
-  const reduce = useReducedMotion() ?? false;
+  const reduce = useCalmMotion() ?? false;
 
   const [live, setLive] = useState<GatewayEvent[]>([]);
   const [connected, setConnected] = useState(false);
@@ -185,7 +185,7 @@ export default function Dashboard() {
         <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(60%_50%_at_75%_45%,rgba(67,96,255,0.16),transparent_70%)]" aria-hidden />
         {/* Position on the outer box; the inner one takes the scroll transform, which would override Tailwind's translate. */}
         <div
-          className="absolute left-1/2 top-[50svh] aspect-square w-[min(1100px,160vw)] -translate-x-1/2 lg:left-auto lg:right-[-14vw] lg:top-1/2 lg:w-[min(1080px,72vw)] lg:-translate-y-1/2 lg:translate-x-0"
+          className="absolute left-1/2 top-[50svh] aspect-square w-[min(1100px,160vw)] -translate-x-1/2 lg:left-[calc(78vw_-_min(660px,42vw))] lg:top-1/2 lg:aspect-[4/3] lg:w-[min(1320px,84vw)] lg:-translate-y-1/2 lg:translate-x-0"
           role="img"
           aria-label={`Globe of ${nodeCount} Lium GPU nodes. Payments circle the ring; each rental fires a beam to its miner.`}
         >
@@ -194,10 +194,10 @@ export default function Dashboard() {
           </motion.div>
         </div>
 
-        <div className="relative z-10 mx-auto w-full max-w-[1280px] px-4 pt-32 sm:px-6 sm:pt-40 lg:pt-44">
-          <div className="max-w-[640px]">
+        <div className="relative z-10 mx-auto w-full max-w-[1280px] px-4 pt-28 sm:px-6 sm:pt-36 lg:pt-[max(7rem,15vh)]">
+          <div className="max-w-[min(760px,58vw)] max-lg:max-w-[640px]">
             <motion.p
-              initial={reduce ? false : { opacity: 0, y: 10 }}
+              initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
               className="num inline-flex items-center gap-3 rounded-full border border-hair bg-void/50 py-1.5 pl-1.5 pr-4 text-[13px] backdrop-blur"
@@ -207,10 +207,10 @@ export default function Dashboard() {
             </motion.p>
 
             <motion.h1
-              initial={reduce ? false : { opacity: 0, y: 24, filter: "blur(8px)" }}
+              initial={{ opacity: 0, y: 24, filter: "blur(8px)" }}
               animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
               transition={{ duration: 0.9, delay: 0.08, ease: [0.16, 1, 0.3, 1] }}
-              className="mt-8 text-[clamp(2.9rem,7.4vw,6.2rem)] font-light leading-[0.94] tracking-[-0.06em]"
+              className="mt-[min(2rem,3.5vh)] text-[clamp(2.6rem,min(7vw,10vh),6.2rem)] font-light leading-[0.94] tracking-[-0.06em]"
             >
               GPUs that agents
               <br />
@@ -218,14 +218,14 @@ export default function Dashboard() {
             </motion.h1>
 
             <motion.div
-              initial={reduce ? false : { opacity: 0, y: 16 }}
+              initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.8, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
             >
-              <p className="mt-7 max-w-[30rem] text-[18px] leading-relaxed text-muted">
+              <p className="mt-[min(1.75rem,3.2vh)] max-w-[30rem] text-[17px] leading-relaxed text-muted lg:text-[18px]">
                 One HTTP request rents a Bittensor Subnet 51 GPU from Lium. The agent pays with x402, in USDC or TAO. No account, no API key, no human.
               </p>
-              <div className="mt-9 flex flex-wrap items-center gap-3">
+              <div className="mt-[min(2.25rem,4vh)] flex flex-wrap items-center gap-3">
                 <a href="#try" className="btn-accent inline-flex min-h-12 items-center gap-2 rounded-full px-6 text-[15px] font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-peri">
                   Rent one from here <ArrowRight className="size-4" aria-hidden />
                 </a>
@@ -458,7 +458,7 @@ function EventToasts({ events, now, reduce }: { events: GatewayEvent[]; now: num
   const top = events.filter((e) => e.type !== "quote.issued").slice(0, 3);
   if (top.length === 0) return null;
   return (
-    <ol className="pointer-events-none absolute right-6 top-[58%] z-10 hidden w-[300px] gap-2 xl:grid" aria-label="Latest gateway events">
+    <ol className="pointer-events-none absolute bottom-28 right-6 z-10 hidden w-[300px] grid-cols-[minmax(0,1fr)] gap-2 xl:grid [@media(max-height:820px)]:!hidden" aria-label="Latest gateway events">
       <AnimatePresence initial={false}>
         {top.map((e, i) => {
           const m = eventMeta(e);
@@ -467,7 +467,7 @@ function EventToasts({ events, now, reduce }: { events: GatewayEvent[]; now: num
             <motion.li
               key={e.id}
               layout={!reduce}
-              initial={reduce ? false : { opacity: 0, x: 24, scale: 0.96 }}
+              initial={{ opacity: 0, x: 24, scale: 0.96 }}
               animate={{ opacity: 1 - i * 0.22, x: 0, scale: 1 }}
               exit={reduce ? undefined : { opacity: 0, x: -12 }}
               transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}

@@ -12,7 +12,6 @@ interface NpmInfo {
   size: number;
   files: number;
   published: string | null;
-  downloads: number | null;
 }
 
 /** Live facts about a package from the npm registry. */
@@ -21,13 +20,9 @@ function useNpm(name: string) {
   const [error, setError] = useState(false);
   useEffect(() => {
     const enc = name.replace("/", "%2f");
-    Promise.all([
-      fetch(`https://registry.npmjs.org/${enc}`).then((r) => (r.ok ? r.json() : Promise.reject())),
-      fetch(`https://api.npmjs.org/downloads/point/last-month/${name}`)
-        .then((r) => (r.ok ? r.json() : null))
-        .catch(() => null),
-    ])
-      .then(([doc, dl]) => {
+    fetch(`https://registry.npmjs.org/${enc}`)
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((doc) => {
         const v = doc["dist-tags"].latest as string;
         const latest = doc.versions[v];
         setInfo({
@@ -37,7 +32,6 @@ function useNpm(name: string) {
           size: latest.dist.unpackedSize,
           files: latest.dist.fileCount,
           published: doc.time?.[v] ?? null,
-          downloads: typeof dl?.downloads === "number" ? dl.downloads : null,
         });
       })
       .catch(() => setError(true));
@@ -142,7 +136,6 @@ function PackageCard({ p }: { p: (typeof PACKAGES)[number] }) {
             <Fact k="License" v={info.license} />
             <Fact k="Unpacked" v={`${(info.size / 1024).toFixed(0)} KB`} />
             {info.published && <Fact k="Published" v={new Date(info.published).toLocaleDateString(undefined, { day: "numeric", month: "short" })} />}
-            {info.downloads !== null && <Fact k="Downloads, 30 d" v={info.downloads.toLocaleString()} />}
           </>
         ) : error ? (
           <p className="text-faint">npm is not reachable right now.</p>

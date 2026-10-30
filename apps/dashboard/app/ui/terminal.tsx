@@ -1,10 +1,10 @@
 "use client";
 
 import { ArrowUpRight } from "lucide-react";
-import { AnimatePresence, motion, useInView, useReducedMotion } from "motion/react";
+import { AnimatePresence, motion, useInView } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { GatewayEvent } from "../lib";
-import { cx } from "./primitives";
+import { cx, useCalmMotion } from "./primitives";
 
 /** The five steps of a paid rental, each drawn from the gateway's own events. */
 const STEPS = [
@@ -102,7 +102,7 @@ function linesFor(step: number, run: GatewayEvent[]): Line[] {
 const STEP_MS = 5000;
 
 export function HowItWorks({ events }: { events: GatewayEvent[] }) {
-  const reduce = useReducedMotion();
+  const reduce = useCalmMotion();
   const ref = useRef<HTMLElement>(null);
   const inView = useInView(ref, { amount: 0.4 });
   const [step, setStep] = useState(0);
@@ -124,12 +124,12 @@ export function HowItWorks({ events }: { events: GatewayEvent[] }) {
       <div className="grid items-center gap-10 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:gap-16">
         <div>
           <p className="eyebrow">
-            <span className="text-peri">0{step + 1}</span> —— How it works / {s.tab}
+            <span className="text-peri">01</span> —— How it works / Step {step + 1} · {s.tab}
           </p>
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
               key={s.id}
-              initial={reduce ? false : { opacity: 0, y: 6 }}
+              initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               exit={reduce ? undefined : { opacity: 0, y: -6 }}
               transition={{ duration: 0.2, ease: [0, 0, 0.2, 1] }}
@@ -165,7 +165,7 @@ export function HowItWorks({ events }: { events: GatewayEvent[] }) {
                 lines.map((l, i) => (
                   <motion.li
                     key={`${s.id}-${l.key}`}
-                    initial={reduce ? false : { opacity: 0, x: -4 }}
+                    initial={{ opacity: 0, x: -4 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ duration: 0.2, delay: reduce ? 0 : i * 0.18, ease: [0, 0, 0.2, 1] }}
                     className={cx("break-words", TONE[l.tone])}

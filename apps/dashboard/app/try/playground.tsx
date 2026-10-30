@@ -1,11 +1,11 @@
 "use client";
 
 import { ArrowUpRight, Download, KeyRound, Loader2, Minus, Play, Plus, Power, Wallet } from "lucide-react";
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { GATEWAY, gpuName, short, type MarketModel } from "../lib";
 import { Code, CopyButton } from "../ui/kit";
-import { CountdownRing, cx } from "../ui/primitives";
+import { CountdownRing, cx, useCalmMotion } from "../ui/primitives";
 import { canMakeSshKeys, makeSshKeyPair, type SshKeyPair } from "./sshkey";
 import { BASE_SEPOLIA, BrowserWallet, USDC_FAUCET, hasWallet, readPaymentRequired } from "./wallet";
 
@@ -29,7 +29,7 @@ const pretty = (v: unknown) => JSON.stringify(v, null, 2);
 
 /** Live, real calls to the gateway, from this page. */
 export function Playground({ models }: { models: MarketModel[] | null }) {
-  const reduce = useReducedMotion();
+  const reduce = useCalmMotion();
   const [mode, setMode] = useState<Mode>("price");
   const [gpu, setGpu] = useState<string | null>(null);
   const [blocks, setBlocks] = useState(1);
@@ -145,7 +145,7 @@ export function Playground({ models }: { models: MarketModel[] | null }) {
         <AnimatePresence mode="wait" initial={false}>
           <motion.div
             key={mode}
-            initial={reduce ? false : { opacity: 0, y: 8 }}
+            initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={reduce ? undefined : { opacity: 0, y: -8 }}
             transition={{ duration: 0.2, ease: [0, 0, 0.2, 1] }}

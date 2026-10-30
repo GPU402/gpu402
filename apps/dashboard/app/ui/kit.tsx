@@ -1,20 +1,19 @@
 "use client";
 
 import { Check, Copy } from "lucide-react";
-import { motion, useReducedMotion } from "motion/react";
+import { motion } from "motion/react";
 import { useEffect, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from "react";
-import { cx } from "./primitives";
+import { cx, useCalmMotion } from "./primitives";
 
 const EASE = [0.16, 1, 0.3, 1] as const;
 
 /** Fades and lifts its children in once they scroll into view. */
 export function Reveal({ children, delay = 0, className, depth }: { children: ReactNode; delay?: number; className?: string; depth?: boolean }) {
-  const reduce = useReducedMotion();
   return (
     <motion.div
       className={className}
       style={depth ? { transformPerspective: 1400, transformOrigin: "50% 0%" } : undefined}
-      initial={reduce ? false : depth ? { opacity: 0, rotateX: 18, y: 60, scale: 0.96 } : { opacity: 0, y: 24, filter: "blur(6px)" }}
+      initial={depth ? { opacity: 0, rotateX: 18, y: 60, scale: 0.96 } : { opacity: 0, y: 24, filter: "blur(6px)" }}
       whileInView={depth ? { opacity: 1, rotateX: 0, y: 0, scale: 1 } : { opacity: 1, y: 0, filter: "blur(0px)" }}
       viewport={{ once: true, margin: "-80px" }}
       transition={{ duration: 0.7, delay, ease: EASE }}
@@ -41,7 +40,7 @@ const GLYPHS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789#%&*+=<>/";
 
 /** Cycles through `words`, scrambling letters between them. Static under reduced motion. */
 export function Scramble({ words, every = 2600, className }: { words: string[]; every?: number; className?: string }) {
-  const reduce = useReducedMotion();
+  const reduce = useCalmMotion();
   const [text, setText] = useState(words[0]!);
   const i = useRef(0);
   useEffect(() => {

@@ -1,10 +1,10 @@
 "use client";
 
 import { Check, MapPin } from "lucide-react";
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
 import { short, type PodView } from "../lib";
 import { STEPS, gpuShort, place, stepOf } from "./events";
-import { CountdownRing, Pill, cx } from "./primitives";
+import { CountdownRing, Pill, cx, useCalmMotion } from "./primitives";
 
 const STATUS: Record<PodView["status"], { label: string; tone: "live" | "amber" | "neutral" | "rose" }> = {
   starting: { label: "Starting", tone: "amber" },
@@ -17,7 +17,7 @@ const STATUS: Record<PodView["status"], { label: string; tone: "live" | "amber" 
 
 /** The story of the rental happening now (or the last one), in one card. */
 export function NowCard({ pod, now, onOpen }: { pod: PodView | null; now: number; onOpen: (p: PodView) => void }) {
-  const reduce = useReducedMotion();
+  const reduce = useCalmMotion();
   if (!pod) {
     return (
       <div className="glass rounded-2xl p-5">
@@ -40,7 +40,7 @@ export function NowCard({ pod, now, onOpen }: { pod: PodView | null; now: number
         key={pod.podId}
         type="button"
         onClick={() => onOpen(pod)}
-        initial={reduce ? false : { opacity: 0, y: 8 }}
+        initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         exit={reduce ? undefined : { opacity: 0, y: -8 }}
         transition={{ duration: 0.25, ease: [0, 0, 0.2, 1] }}

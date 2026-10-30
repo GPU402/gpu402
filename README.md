@@ -11,6 +11,8 @@
 <a href="https://github.com/coinbase/x402"><img alt="x402" src="https://img.shields.io/badge/x402-v2-0b0f14?labelColor=0b0f14&color=5aa9ff"></a>
 </p>
 
+<img src="docs/screenshots/hero.jpg" alt="The GPU402 dashboard: a globe of real Lium GPU nodes inside an x402 payment ring, beside the headline 'GPUs that agents pay for themselves.'" width="100%">
+
 </div>
 
 <br>
@@ -69,6 +71,35 @@ With the [agent tools](#agent-tools), all of this is one function call the model
 
 <br>
 
+## The dashboard
+
+Run `pnpm dev` and open http://localhost:3000. Every number, event and response on the page comes from the live gateway, Lium and the Bittensor chain. You can try the whole flow from the browser, including renting a GPU with your own wallet.
+
+**How it works.** A terminal replays the latest real rental from the gateway's own events, one step at a time: the 402 quote, the payment, the rent on Lium, SSH, and the release.
+
+<img src="docs/screenshots/terminal.jpg" alt="Terminal replay of a real rental: the payment verified in USDC and settled in TAO" width="100%">
+
+**Playground.** Every button sends a real request. *Price a GPU* calls `GET /quote`. *Get the 402* sends an unpaid `POST /rent` and decodes the `PAYMENT-REQUIRED` header into its USDC and TAO offers. *Pay and rent* connects your browser wallet, makes an Ed25519 SSH key in the page, pays in USDC on Base Sepolia, and gives you the SSH command and a countdown. The code beside it updates as you choose a GPU and a time.
+
+<img src="docs/screenshots/playground.jpg" alt="Playground showing a real HTTP 402 with a USDC offer and a TAO offer, next to the matching SDK code" width="100%">
+
+<table>
+<tr>
+<td width="50%"><img src="docs/screenshots/gpu.jpg" alt="A 3D GPU card whose fans spin up while a pod is live"><br><sub><b>A real machine.</b> A three.js GPU card that turns as you scroll and follows the pointer. Its fans spin up while a real pod is live.</sub></td>
+<td width="50%"><img src="docs/screenshots/proof.jpg" alt="Paper card with the total paid over x402, split between USDC and TAO, with transaction links"><br><sub><b>Proof.</b> What agents paid, split by currency, with the latest settlements linked to the chain.</sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/screenshots/packages.jpg" alt="Package cards for gpu402 and @gpu402/tools with live npm versions"><br><sub><b>Packages.</b> Version, licence, size and publish date, read live from the npm registry.</sub></td>
+<td width="50%"><img src="docs/screenshots/api.jpg" alt="API explorer listing every gateway endpoint, with a live response from GET /"><br><sub><b>API.</b> Every endpoint the gateway lists at <code>GET /</code>. The free ones run right on the page.</sub></td>
+</tr>
+</table>
+
+<img src="docs/screenshots/network.jpg" alt="Subnet 51 miners by incentive and the live GPU market with GPU402 block prices" width="100%">
+
+<sub><b>Network.</b> Subnet 51 read from Bittensor Finney, and Lium's live market priced in 15-minute blocks.</sub>
+
+<br>
+
 ## What is in the box
 
 **`gpu402`** · [packages/sdk](packages/sdk)
@@ -81,7 +112,7 @@ A small HTTP service that sells Lium GPU time in prepaid 15-minute blocks. It ho
 `rentGpu`, `runOnGpu`, `stopGpu` and `listGpus`, ready to hand to the Vercel AI SDK or LangChain.js. One flag switches them between your Lium key and an agent paying from its wallet.
 
 **The dashboard** · [apps/dashboard](apps/dashboard)
-A live view for operators and anyone watching the demo: pods counting down, every payment linked to its BaseScan transaction, the GPU market, and Subnet 51 read straight from the Bittensor chain.
+The live site in the screenshots above: a 3D globe of Lium's real nodes, a playground that rents a GPU from your own wallet, an API explorer, npm package cards, the GPU market, and Subnet 51 read straight from the Bittensor chain.
 
 <br>
 
