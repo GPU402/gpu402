@@ -63,5 +63,8 @@
   "bugs": {
     "url": "https://github.com/GPU402/gpu402/issues"
   },
-  "author": "rythmern02"
+  "author": "rythmern02",
+  "publishConfig": {
+    "access": "public"
+  }
 }

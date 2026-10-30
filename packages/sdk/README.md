@@ -35,3 +35,11 @@ await lium.stop(pod.podId);
 - **Types** are regenerated from `https://lium.io/api/openapi.json` with `pnpm gen:types`, so the SDK tracks Lium's API exactly.
 
 Listing GPUs and quotes work without a key. Node 20+.
+
+## Links
+
+- Source and docs: https://github.com/GPU402/gpu402
+- Agent tools (Vercel AI SDK, LangChain.js, x402 payments in USDC or TAO): https://www.npmjs.com/package/@gpu402/tools
+- Lium API: https://lium.io/api/openapi.json
+
+GPU402 is a community project and is not maintained by Lium.

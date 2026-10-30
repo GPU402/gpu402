@@ -37,7 +37,8 @@
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests",
+    "prepublishOnly": "pnpm run build && pnpm run test"
   },
   "dependencies": {
     "@x402/core": "^2.29.0",
@@ -74,5 +75,19 @@
   "bugs": {
     "url": "https://github.com/GPU402/gpu402/issues"
   },
-  "author": "rythmern02"
+  "author": "rythmern02",
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "x402",
+    "ai-agents",
+    "vercel-ai-sdk",
+    "langchain",
+    "gpu",
+    "lium",
+    "bittensor",
+    "tao",
+    "usdc"
+  ]
 }
