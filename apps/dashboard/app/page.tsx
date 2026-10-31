@@ -62,7 +62,6 @@ export default function Dashboard() {
   const reduce = useCalmMotion() ?? false;
 
   const [live, setLive] = useState<GatewayEvent[]>([]);
-  const [connected, setConnected] = useState(false);
   const [pulses, setPulses] = useState<EnginePulse[]>([]);
   const [tab, setTab] = useState<Tab>("Activity");
   const [open, setOpen] = useState<string | null>(null);
@@ -83,12 +82,13 @@ export default function Dashboard() {
     return true;
   }, []);
 
-  useEffect(() => {
-    const es = new EventSource(`${GATEWAY}/api/events`);
-    es.addEventListener("hello", () => setConnected(true));
-    es.addEventListener("gateway", (m) => {
-      const e = JSON.parse((m as MessageEvent).data) as GatewayEvent;
-      setLive((prev) => [e, ...prev].slice(0, 60));
+  // Each event animates the globe once, whether it arrives over the live stream or the 4 s state poll.
+  // Some proxies (Cloudflare quick tunnels) never deliver the stream, so the poll must be enough on its own.
+  const animated = useRef<Set<number> | null>(null);
+  const animate = useCallback(
+    (e: GatewayEvent) => {
+      if (!animated.current || animated.current.has(e.id)) return;
+      animated.current.add(e.id);
       if (e.type === "payment.settled") {
         const color = railOf(e) === "tao" ? COLOR.tao : COLOR.usdc;
         setPulses((p) => [...p, { key: `pay-${e.id}-${e.ts}`, kind: "payment", color, at: performance.now() }]);
@@ -97,11 +97,31 @@ export default function Dashboard() {
         const pod = podsRef.current.find((p) => p.podId === e.pod_id);
         if (!pod || !beam(pod)) pending.current.add(e.pod_id);
       }
+    },
+    [beam],
+  );
+
+  useEffect(() => {
+    const es = new EventSource(`${GATEWAY}/api/events`);
+    es.addEventListener("gateway", (m) => {
+      const e = JSON.parse((m as MessageEvent).data) as GatewayEvent;
+      setLive((prev) => [e, ...prev].slice(0, 60));
+      animate(e);
       void reloadState.current();
     });
-    es.onerror = () => setConnected(false);
     return () => es.close();
-  }, [beam]);
+  }, [animate]);
+
+  // History already on the page when it opens is not replayed; anything newer from the poll is.
+  useEffect(() => {
+    const evs = state.data?.events;
+    if (!evs) return;
+    if (!animated.current) {
+      animated.current = new Set(evs.map((e) => e.id));
+      return;
+    }
+    for (const e of [...evs].reverse()) animate(e);
+  }, [state.data?.events, animate]);
 
   // Fire the beams that were waiting for coordinates.
   useEffect(() => {
@@ -140,7 +160,8 @@ export default function Dashboard() {
   const current = pods.find((p) => p.status === "running" || p.status === "starting") ?? pods[0] ?? null;
   const openPod = pods.find((p) => p.podId === open) ?? null;
   const offline = Boolean(state.error) && !s;
-  const online = connected && !state.error;
+  // Online means the gateway answers; the live stream is a bonus some proxies never deliver.
+  const online = Boolean(s) && !state.error;
   const nodeCount = nodes.data?.nodes.length ?? 0;
   const models = market.data?.models ?? null;
 

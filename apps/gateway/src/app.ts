@@ -518,8 +518,8 @@ export function createApp(d: AppDeps) {
     return c.json({ nodes, at: pricing.marketAt ? new Date(pricing.marketAt).toISOString() : null });
   });
 
-  app.get("/api/events", (c) =>
-    streamSSE(c, async (stream) => {
+  app.get("/api/events", (c) => {
+    const res = streamSSE(c, async (stream) => {
       const queue: string[] = [];
       let wake: (() => void) | undefined;
       const unsubscribe = bus.subscribe((e) => {
@@ -530,6 +530,8 @@ export function createApp(d: AppDeps) {
         unsubscribe();
         wake?.();
       });
+      // A comment line that browsers ignore; 2 KB is enough to push the stream past proxy buffers.
+      await stream.write(`:${" ".repeat(2048)}\n\n`);
       await stream.writeSSE({ event: "hello", data: JSON.stringify({ at: Date.now() }) });
       while (!stream.aborted) {
         if (queue.length === 0) {
@@ -540,8 +542,14 @@ export function createApp(d: AppDeps) {
         while (queue.length) await stream.writeSSE({ event: "gateway", data: queue.shift()! });
       }
       unsubscribe();
-    }),
-  );
+    });
+    // Proxies such as Cloudflare compress, and so hold back, event streams unless told not to.
+    // streamSSE sets its own Cache-Control, so this goes on the response it returns.
+    c.header("Cache-Control", "no-cache, no-transform");
+    res.headers.set("Cache-Control", "no-cache, no-transform");
+    res.headers.set("X-Accel-Buffering", "no");
+    return res;
+  });
 
   return app;
 }
