@@ -229,3 +229,24 @@ describe("browser payments", () => {
     }
   });
 });
+
+describe("public site, local gateway", () => {
+  it("opts in to Chrome's Private Network Access on preflight", async () => {
+    const h = await createHarness();
+    try {
+      const res = await h.gatewayFetch("http://gateway.test/rent", {
+        method: "OPTIONS",
+        headers: {
+          origin: "https://gpu402.vercel.app",
+          "access-control-request-method": "POST",
+          "access-control-request-headers": "content-type",
+          "access-control-request-private-network": "true",
+        },
+      });
+      expect(res.headers.get("access-control-allow-private-network")).toBe("true");
+      expect(res.headers.get("access-control-allow-origin")).toBe("*");
+    } finally {
+      await h.close();
+    }
+  });
+});

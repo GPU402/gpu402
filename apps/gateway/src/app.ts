@@ -107,6 +107,12 @@ export function createApp(d: AppDeps) {
   const app = new Hono<Env>();
   const baseUrl = (c: Context) => cfg.PUBLIC_URL ?? new URL(c.req.url).origin;
 
+  // Chrome only lets a public site call a gateway on localhost or a LAN address when the
+  // preflight says so (Private Network Access); without it the browser reports a CORS error.
+  app.use("*", async (c, next) => {
+    await next();
+    if (c.req.header("access-control-request-private-network") === "true") c.res.headers.set("Access-Control-Allow-Private-Network", "true");
+  });
   app.use(
     "*",
     cors({
